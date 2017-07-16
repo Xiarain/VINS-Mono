@@ -208,6 +208,10 @@ bool FeatureTracker::updateID(unsigned int i)
         return false;
 }
 
+/**
+ * @brief 读取相机内参参数
+ * @param calib_file
+ */
 void FeatureTracker::readIntrinsicParameter(const string &calib_file)
 {
     ROS_INFO("reading paramerter of camera %s", calib_file.c_str());

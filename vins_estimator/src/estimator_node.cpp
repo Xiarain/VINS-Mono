@@ -152,9 +152,12 @@ getMeasurements()
 
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
 {
+    // 把IMU数据存储到buffer中
     m_buf.lock();
     imu_buf.push(imu_msg);
     m_buf.unlock();
+
+    // 消息队列，通知其他线程处理数据
     con.notify_one();
 
     {
@@ -440,6 +443,7 @@ void process()
 {
     while (true)
     {
+        // measurements数据类型 = sensor_msgs::ImuConstPtr + sensor_msgs::PointCloudConstPtr
         std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>> measurements;
         std::unique_lock<std::mutex> lk(m_buf);
         con.wait(lk, [&]
@@ -448,6 +452,7 @@ void process()
                  });
         lk.unlock();
 
+        // 对每一个measurement 进行处理
         for (auto &measurement : measurements)
         {
             for (auto &imu_msg : measurement.first)
@@ -591,6 +596,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_image = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
     ros::Subscriber sub_raw_image = n.subscribe(IMAGE_TOPIC, 2000, raw_image_callback);
 
+    // 多线程 measurement_process、loop_detection pose_graph
+    // 测量值处理
     std::thread measurement_process{process};
     std::thread loop_detection, pose_graph;
     if (LOOP_CLOSURE)

@@ -301,6 +301,13 @@ void updateLoopPath(nav_msgs::Path _loop_path)
     loop_path = _loop_path;
 }
 
+/**
+ * @brief  发布TF关系树
+ * @param estimator 全局与局部关系估计值
+ * @param header 帧头
+ * @param loop_correct_t 闭环纠正偏移量
+ * @param loop_correct_r 闭环纠正旋转量
+ */
 void pubTF(const Estimator &estimator, const std_msgs::Header &header, Eigen::Vector3d loop_correct_t,
                    Eigen::Matrix3d loop_correct_r)
 {

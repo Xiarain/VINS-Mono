@@ -114,6 +114,19 @@ void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Po
 //  c_translation cam_R_w
 // relative_q[i][j]  j_q_i
 // relative_t[i][j]  j_t_ji  (j < i)
+
+/**
+ * @brief SFM构造
+ * @param frame_num 帧数
+ * @param q
+ * @param T
+ * @param l
+ * @param relative_R
+ * @param relative_T
+ * @param sfm_f
+ * @param sfm_tracked_points
+ * @return
+ */
 bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 			  const Matrix3d relative_R, const Vector3d relative_T,
 			  vector<SFMFeature> &sfm_f, map<int, Vector3d> &sfm_tracked_points)

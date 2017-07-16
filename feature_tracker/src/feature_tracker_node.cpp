@@ -237,9 +237,11 @@ int main(int argc, char **argv)
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     readParameters(n);
 
+    // NUM_OF_CAM 恒为1
     for (int i = 0; i < NUM_OF_CAM; i++)
         trackerData[i].readIntrinsicParameter(CAM_NAMES[i]);
 
+    // 是否是鱼眼相机
     if(FISHEYE)
     {
         for (int i = 0; i < NUM_OF_CAM; i++)

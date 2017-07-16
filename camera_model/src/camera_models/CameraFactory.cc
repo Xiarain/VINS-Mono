@@ -49,7 +49,7 @@ CameraFactory::generateCamera(Camera::ModelType modelType,
         camera->setParameters(params);
         return camera;
     }
-    case Camera::PINHOLE:
+    case Camera::PINHOLE: // 针孔模型
     {
         PinholeCameraPtr camera(new PinholeCamera);
 
@@ -71,7 +71,7 @@ CameraFactory::generateCamera(Camera::ModelType modelType,
         camera->setParameters(params);
         return camera;
     }
-    case Camera::MEI:
+    case Camera::MEI: // MEI模型（论文中有提到）
     default:
     {
         CataCameraPtr camera(new CataCamera);

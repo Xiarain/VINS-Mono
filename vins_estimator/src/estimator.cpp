@@ -69,8 +69,15 @@ void Estimator::clearState()
     f_manager.clearState();
 }
 
+/**
+ * @brief  对IMU测量数据进行处理
+ * @param dt 单位周期时间
+ * @param linear_acceleration 线加速度测量值
+ * @param angular_velocity 角速度测量值
+ */
 void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
+    // 对第一帧IMU数据的处理
     if (!first_imu)
     {
         first_imu = true;
@@ -78,6 +85,7 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         gyr_0 = angular_velocity;
     }
 
+    // 预积分
     if (!pre_integrations[frame_count])
     {
         pre_integrations[frame_count] = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
@@ -88,16 +96,21 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         //if(solver_flag != NON_LINEAR)
             tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);
 
+        // 向buffer中添加单位时间、线加速度、角速度
         dt_buf[frame_count].push_back(dt);
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
         int j = frame_count;         
+
         Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
-        Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
+
+        Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix(); // delta q
+
         Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;
         Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
+
         Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;
         Vs[j] += dt * un_acc;
     }

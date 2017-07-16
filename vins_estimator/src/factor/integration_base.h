@@ -10,6 +10,14 @@ class IntegrationBase
 {
   public:
     IntegrationBase() = delete;
+
+    /**
+     * @brief  初始化测量噪声矩阵
+     * @param _acc_0
+     * @param _gyr_0
+     * @param _linearized_ba
+     * @param _linearized_bg
+     */
     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},
@@ -51,6 +59,25 @@ class IntegrationBase
             propagate(dt_buf[i], acc_buf[i], gyr_buf[i]);
     }
 
+    /**
+     * @brief  中值积分
+     * @param _dt
+     * @param _acc_0
+     * @param _gyr_0
+     * @param _acc_1
+     * @param _gyr_1
+     * @param delta_p
+     * @param delta_q
+     * @param delta_v
+     * @param linearized_ba
+     * @param linearized_bg
+     * @param result_delta_p
+     * @param result_delta_q
+     * @param result_delta_v
+     * @param result_linearized_ba
+     * @param result_linearized_bg
+     * @param update_jacobian
+     */
     void midPointIntegration(double _dt, 
                             const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                             const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1,
@@ -77,6 +104,7 @@ class IntegrationBase
             Vector3d a_1_x = _acc_1 - linearized_ba;
             Matrix3d R_w_x, R_a_0_x, R_a_1_x;
 
+            // 斜对称阵
             R_w_x<<0, -w_x(2), w_x(1),
                 w_x(2), 0, -w_x(0),
                 -w_x(1), w_x(0), 0;
@@ -87,6 +115,7 @@ class IntegrationBase
                 a_1_x(2), 0, -a_1_x(0),
                 -a_1_x(1), a_1_x(0), 0;
 
+            // Technical Report 公式（9）
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 
@@ -121,6 +150,7 @@ class IntegrationBase
 
             //step_jacobian = F;
             //step_V = V;
+            // Technical Report 公式（11） 更新雅克比矩阵
             jacobian = F * jacobian;
             covariance = F * covariance * F.transpose() + V * noise * V.transpose();
         }
@@ -160,6 +190,7 @@ class IntegrationBase
     Eigen::Matrix<double, 15, 1> evaluate(const Eigen::Vector3d &Pi, const Eigen::Quaterniond &Qi, const Eigen::Vector3d &Vi, const Eigen::Vector3d &Bai, const Eigen::Vector3d &Bgi,
                                           const Eigen::Vector3d &Pj, const Eigen::Quaterniond &Qj, const Eigen::Vector3d &Vj, const Eigen::Vector3d &Baj, const Eigen::Vector3d &Bgj)
     {
+        // Technical Report: 公式（12）
         Eigen::Matrix<double, 15, 1> residuals;
 
         Eigen::Matrix3d dp_dba = jacobian.block<3, 3>(O_P, O_BA);
