@@ -12,14 +12,14 @@ using namespace Eigen;
 using namespace std;
 
 
-
+// 一个SFMFeature是由一个3D点特征，若干个2D点特征组成
 struct SFMFeature
 {
     bool state;
     int id;
-    vector<pair<int,Vector2d>> observation;
-    double position[3];
-    double depth;
+    vector<pair<int,Vector2d>> observation; // 2D点
+    double position[3]; // 3D 点
+    double depth; // 深度
 };
 
 struct ReprojectionError3D
