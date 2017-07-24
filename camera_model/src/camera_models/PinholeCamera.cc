@@ -341,6 +341,12 @@ PinholeCamera::imageHeight(void) const
     return mParameters.imageHeight();
 }
 
+/**
+ * @brief 通过针孔模型来估计相机的内参
+ * @param boardSize 棋盘格子的大小
+ * @param objectPoints 世界坐标下的棋盘角点
+ * @param imagePoints 图像坐标下的棋盘角点
+ */
 void
 PinholeCamera::estimateIntrinsics(const cv::Size& boardSize,
                                   const std::vector< std::vector<cv::Point3f> >& objectPoints,
@@ -350,7 +356,7 @@ PinholeCamera::estimateIntrinsics(const cv::Size& boardSize,
 
     Parameters params = getParameters();
 
-    params.k1() = 0.0;
+    params.k1d() = 0.0;
     params.k2() = 0.0;
     params.p1() = 0.0;
     params.p2() = 0.0;
@@ -377,6 +383,7 @@ PinholeCamera::estimateIntrinsics(const cv::Size& boardSize,
 
         cv::Mat H = cv::findHomography(M, imagePoints.at(i));
 
+        // 把图像点的坐标系原点变换到图像中心，假设cx和cy为图像中心
         H.at<double>(0,0) -= H.at<double>(2,0) * cx;
         H.at<double>(0,1) -= H.at<double>(2,1) * cx;
         H.at<double>(0,2) -= H.at<double>(2,2) * cx;
@@ -389,32 +396,37 @@ PinholeCamera::estimateIntrinsics(const cv::Size& boardSize,
 
         for (int j = 0; j < 3; ++j)
         {
-            double t0 = H.at<double>(j,0);
-            double t1 = H.at<double>(j,1);
+            double t0 = H.at<double>(j,0); // h1 h4 h7 h[]
+            double t1 = H.at<double>(j,1); // h2 h5 h8 v[]
             h[j] = t0; v[j] = t1;
-            d1[j] = (t0 + t1) * 0.5;
-            d2[j] = (t0 - t1) * 0.5;
-            n[0] += t0 * t0; n[1] += t1 * t1;
-            n[2] += d1[j] * d1[j]; n[3] += d2[j] * d2[j];
+            d1[j] = (t0 + t1) * 0.5; // 0.5(h1+h2) 0.5(h4+h5) 0.5(h7+h8)
+            d2[j] = (t0 - t1) * 0.5; // 0.5(h1-h2) 0.5(h4-h5) 0.5(h7-h8)
+            n[0] += t0 * t0; // h1*h1 + h4*h4 + h7*h7
+            n[1] += t1 * t1; // h2*h2 + h5*h5 + h8*h8
+            n[2] += d1[j] * d1[j]; // 0.5(h1+h2)*0.5(h1+h2) + 0.5(h4+h5)*0.5(h4+h5) + 0.5(h7+h8)*0.5(h7+h8)
+            n[3] += d2[j] * d2[j]; // 0.5(h1-h2)*0.5(h1-h2) + 0.5(h4-h5)*0.5(h4-h5) + 0.5(h7-h8)*0.5(h7-h8)
         }
 
         for (int j = 0; j < 4; ++j)
         {
-            n[j] = 1.0 / sqrt(n[j]);
+            n[j] = 1.0 / sqrt(n[j]); // 倒数 开根号
         }
 
         for (int j = 0; j < 3; ++j)
         {
-            h[j] *= n[0]; v[j] *= n[1];
-            d1[j] *= n[2]; d2[j] *= n[3];
+            // 归一化
+            h[j] *= n[0]; // h1 * (h1*h1 + h4*h4 + h7*h7)^(-0.5) 同理 h4 h7
+            v[j] *= n[1]; // h2 * (h2*h2 + h5*h5 + h8*h8)^(-0.5) 同理 h5 h8
+            d1[j] *= n[2]; // 0.5(h1+h2) * (0.5(h1+h2)*0.5(h1+h2) + 0.5(h4+h5)*0.5(h4+h5) + 0.5(h7+h8)*0.5(h7+h8))^(-0.5)
+            d2[j] *= n[3]; // 0.5(h1-h2) * (0.5(h1-h2)*0.5(h1-h2) + 0.5(h4-h5)*0.5(h4-h5) + 0.5(h7-h8)*0.5(h7-h8))^(-0.5)
         }
 
-        A.at<double>(i * 2, 0) = h[0] * v[0];
-        A.at<double>(i * 2, 1) = h[1] * v[1];
-        A.at<double>(i * 2 + 1, 0) = d1[0] * d2[0];
-        A.at<double>(i * 2 + 1, 1) = d1[1] * d2[1];
-        b.at<double>(i * 2, 0) = -h[2] * v[2];
-        b.at<double>(i * 2 + 1, 0) = -d1[2] * d2[2];
+        A.at<double>(i * 2, 0) = h[0] * v[0]; // 归一化后的 h1*h2
+        A.at<double>(i * 2, 1) = h[1] * v[1]; // 归一化后的 h4*h5
+        A.at<double>(i * 2 + 1, 0) = d1[0] * d2[0]; // 归一化后的 0.5(h1+h2)*0.5(h1-h2)
+        A.at<double>(i * 2 + 1, 1) = d1[1] * d2[1]; // 归一化后的 0.5(h4+h5)*0.5(h4-h5)
+        b.at<double>(i * 2, 0) = -h[2] * v[2]; // 归一化后的 h7*h8
+        b.at<double>(i * 2 + 1, 0) = -d1[2] * d2[2]; // 归一化后的 0.5(h7+h8)*0.5(h7-h8)
     }
 
     cv::Mat f(2, 1, CV_64F);
@@ -442,7 +454,7 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 
 /**
  * \brief Lifts a point from the image plane to its projective ray
- *
+ *        从图像平面到投射光线的一个点
  * \param p image coordinates
  * \param P coordinates of the projective ray
  */
@@ -454,8 +466,8 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     //double lambda;
 
     // Lift points to normalised plane
-    mx_d = m_inv_K11 * p(0) + m_inv_K13;
-    my_d = m_inv_K22 * p(1) + m_inv_K23;
+    mx_d = m_inv_K11 * p(0) + m_inv_K13; // 1/fx * x - u0/fx
+    my_d = m_inv_K22 * p(1) + m_inv_K23; // 1/fy * y - v0/fy
 
     if (m_noDistortion)
     {
@@ -512,7 +524,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
 
 /**
  * \brief Project a 3D point (\a x,\a y,\a z) to the image plane in (\a u,\a v)
- *
+ *        将3D点投影到图像平面上
  * \param P 3D point coordinates
  * \param p return value, contains the image point coordinates
  */
@@ -522,6 +534,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p) const
     Eigen::Vector2d p_u, p_d;
 
     // Project points to the normalised plane
+    // 归一化坐标系
     p_u << P(0) / P(2), P(1) / P(2);
 
     if (m_noDistortion)
@@ -532,6 +545,8 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p) const
     {
         // Apply distortion
         Eigen::Vector2d d_u;
+
+        // 利用畸变模型对输入的点进行畸变
         distortion(p_u, d_u);
         p_d = p_u + d_u;
     }
@@ -610,7 +625,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p,
 
 /**
  * \brief Projects an undistorted 2D point p_u to the image plane
- *
+ *        理想的成像平面坐标与实际的成像平面坐标间的转换
  * \param p_u 2D point coordinates
  * \return image point coordinates
  */
@@ -627,6 +642,8 @@ PinholeCamera::undistToPlane(const Eigen::Vector2d& p_u, Eigen::Vector2d& p) con
     {
         // Apply distortion
         Eigen::Vector2d d_u;
+
+        // 相机畸变
         distortion(p_u, d_u);
         p_d = p_u + d_u;
     }
@@ -638,7 +655,7 @@ PinholeCamera::undistToPlane(const Eigen::Vector2d& p_u, Eigen::Vector2d& p) con
 
 /**
  * \brief Apply distortion to input point (from the normalised plane)
- *
+ *        利用畸变模型对输入的点进行畸变
  * \param p_u undistorted coordinates of point on the normalised plane
  * \return to obtain the distorted point: p_d = p_u + d_u
  */
@@ -652,11 +669,11 @@ PinholeCamera::distortion(const Eigen::Vector2d& p_u, Eigen::Vector2d& d_u) cons
 
     double mx2_u, my2_u, mxy_u, rho2_u, rad_dist_u;
 
-    mx2_u = p_u(0) * p_u(0);
-    my2_u = p_u(1) * p_u(1);
-    mxy_u = p_u(0) * p_u(1);
-    rho2_u = mx2_u + my2_u;
-    rad_dist_u = k1 * rho2_u + k2 * rho2_u * rho2_u;
+    mx2_u = p_u(0) * p_u(0); // x'^2
+    my2_u = p_u(1) * p_u(1); // y'^2
+    mxy_u = p_u(0) * p_u(1); // x'*y'
+    rho2_u = mx2_u + my2_u; // r^2 = x'^2 + y'^2
+    rad_dist_u = k1 * rho2_u + k2 * rho2_u * rho2_u; // k1*r^2 + k2*r^4
     d_u << p_u(0) * rad_dist_u + 2.0 * p1 * mxy_u + p2 * (rho2_u + 2.0 * mx2_u),
            p_u(1) * rad_dist_u + 2.0 * p2 * mxy_u + p1 * (rho2_u + 2.0 * my2_u);
 }
@@ -664,6 +681,7 @@ PinholeCamera::distortion(const Eigen::Vector2d& p_u, Eigen::Vector2d& d_u) cons
 /**
  * \brief Apply distortion to input point (from the normalised plane)
  *        and calculate Jacobian
+ *        利用畸变模型对输入的点进行畸变并计算雅克比矩阵
  *
  * \param p_u undistorted coordinates of point on the normalised plane
  * \return to obtain the distorted point: p_d = p_u + d_u
@@ -687,6 +705,7 @@ PinholeCamera::distortion(const Eigen::Vector2d& p_u, Eigen::Vector2d& d_u,
     d_u << p_u(0) * rad_dist_u + 2.0 * p1 * mxy_u + p2 * (rho2_u + 2.0 * mx2_u),
            p_u(1) * rad_dist_u + 2.0 * p2 * mxy_u + p1 * (rho2_u + 2.0 * my2_u);
 
+    // 对函数x''和y''进行求解雅克比矩阵，变量为x’和y‘；注意r^2 = x'^2 + y'^2。
     double dxdmx = 1.0 + rad_dist_u + k1 * 2.0 * mx2_u + k2 * rho2_u * 4.0 * mx2_u + 2.0 * p1 * p_u(1) + 6.0 * p2 * p_u(0);
     double dydmx = k1 * 2.0 * p_u(0) * p_u(1) + k2 * 4.0 * rho2_u * p_u(0) * p_u(1) + p1 * 2.0 * p_u(0) + 2.0 * p2 * p_u(1);
     double dxdmy = dydmx;
@@ -696,6 +715,12 @@ PinholeCamera::distortion(const Eigen::Vector2d& p_u, Eigen::Vector2d& d_u,
          dydmx, dydmy;
 }
 
+/**
+ * @brief 初始化矫正图像和畸变图像之间映射关系
+ * @param map1
+ * @param map2
+ * @param fScale
+ */
 void
 PinholeCamera::initUndistortMap(cv::Mat& map1, cv::Mat& map2, double fScale) const
 {
@@ -715,6 +740,8 @@ PinholeCamera::initUndistortMap(cv::Mat& map1, cv::Mat& map2, double fScale) con
             P << mx_u, my_u, 1.0;
 
             Eigen::Vector2d p;
+
+            // 将3D点投影到图像平面上
             spaceToPlane(P, p);
 
             mapX.at<float>(v,u) = p(0);
@@ -722,9 +749,22 @@ PinholeCamera::initUndistortMap(cv::Mat& map1, cv::Mat& map2, double fScale) con
         }
     }
 
+    // 将图像从一种类型，转换成另一种类型
     cv::convertMaps(mapX, mapY, map1, map2, CV_32FC1, false);
 }
 
+/**
+ * @brief 输出通过相机畸变模型得到的畸变图像，这个畸变图像就是畸变图像和矫正图像之间的关系；后续可以通过cv::Remap()进行处理
+ * @param map1 第一输出图，x轴坐标映射
+ * @param map2 第二输出图，y轴坐标映射
+ * @param fx
+ * @param fy
+ * @param imageSize
+ * @param cx
+ * @param cy
+ * @param rmat 旋转矩阵(opencv格式)
+ * @return
+ */
 cv::Mat
 PinholeCamera::initUndistortRectifyMap(cv::Mat& map1, cv::Mat& map2,
                                        float fx, float fy,
@@ -745,8 +785,11 @@ PinholeCamera::initUndistortRectifyMap(cv::Mat& map1, cv::Mat& map2,
     R_inv = R.inverse();
 
     // assume no skew
+    // 内参矩阵
     Eigen::Matrix3f K_rect;
 
+
+    // TODO 如果 cx cy 是 -1，则让cx cy为图像大小的额一半？
     if (cx == -1.0f || cy == -1.0f)
     {
         K_rect << fx, 0, imageSize.width / 2,
@@ -775,9 +818,11 @@ PinholeCamera::initUndistortRectifyMap(cv::Mat& map1, cv::Mat& map2,
             Eigen::Vector3f xo;
             xo << u, v, 1;
 
+            // 从世界坐标系到相机坐标系，基于针孔模型的透视投影变换
             Eigen::Vector3f uo = R_inv * K_rect_inv * xo;
 
             Eigen::Vector2d p;
+            // 实际的成像平面坐标与图像坐标的线性变换
             spaceToPlane(uo.cast<double>(), p);
 
             mapX.at<float>(v,u) = p(0);

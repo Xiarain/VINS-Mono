@@ -26,6 +26,7 @@ int main(int argc, char** argv)
     bool verbose;
 
     //========= Handling Program options =========
+    // boost::program_options提供了方便的命令行和配置文件进行程序选项设置的方法
     boost::program_options::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
@@ -101,6 +102,7 @@ int main(int argc, char** argv)
     }
 
     // look for images in input directory
+    // 在输入目录中寻找图片
     std::vector<std::string> imageFilenames;
     boost::filesystem::directory_iterator itr;
     for (boost::filesystem::directory_iterator itr(inputDir); itr != boost::filesystem::directory_iterator(); ++itr)
@@ -148,9 +150,12 @@ int main(int argc, char** argv)
 
     std::sort(imageFilenames.begin(), imageFilenames.end());
 
+    // 读取图片
     cv::Mat image = cv::imread(imageFilenames.front(), -1);
     const cv::Size frameSize = image.size();
 
+    // camodocal::CameraCalibratio 类
+    // 配置相机模型，相机名字，图像大小，棋盘大小，棋格大小
     camodocal::CameraCalibration calibration(modelType, cameraName, frameSize, boardSize, squareSize);
     calibration.setVerbose(verbose);
 
