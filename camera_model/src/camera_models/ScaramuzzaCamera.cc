@@ -290,7 +290,7 @@ OCAMCamera::estimateIntrinsics(const cv::Size& boardSize,
         const double sr32_squared_1 = (- (CC-BB) + sqrt(square(CC-BB) + 4.0 * AA)) / 2.0;
         const double sr32_squared_2 = (- (CC-BB) - sqrt(square(CC-BB) + 4.0 * AA)) / 2.0;
 
-// printf("rst = %.12f\n", sr32_squared_1*sr32_squared_1 + (CC-BB)*sr32_squared_1 - AA);
+        // printf("rst = %.12f\n", sr32_squared_1*sr32_squared_1 + (CC-BB)*sr32_squared_1 - AA);
 
         std::vector<double> sr32_squared_values;
         if (sr32_squared_1 > 0) sr32_squared_values.push_back(sr32_squared_1);

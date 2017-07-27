@@ -67,7 +67,15 @@ Chessboard::getSketch(void) const
 {
     return mSketch;
 }
-
+/**
+ * @brief 查找棋盘格角点，可以选择使用opencv库还是使用改进版本的
+ * @param image
+ * @param patternSize
+ * @param corners
+ * @param flags
+ * @param useOpenCV
+ * @return
+ */
 bool
 Chessboard::findChessboardCorners(const cv::Mat& image,
                                   const cv::Size& patternSize,

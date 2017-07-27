@@ -414,9 +414,11 @@ CataCamera::estimateIntrinsics(const cv::Size& boardSize,
                 P.at<double>(c, 3) = -0.5 * (square(u) + square(v));
             }
 
+            // C = [c1, c2, c3, c4]
             cv::Mat C;
             cv::SVD::solveZ(P, C);
 
+            // 1) t = c1^2 + c2^2 + c3c4
             double t = square(C.at<double>(0)) + square(C.at<double>(1)) + C.at<double>(2) * C.at<double>(3);
             if (t < 0.0)
             {
@@ -424,14 +426,18 @@ CataCamera::estimateIntrinsics(const cv::Size& boardSize,
             }
 
             // check that line image is not radial
+            // 2) d = (1/t)^0.5, nx = c1d, ny = c2d
             double d = sqrt(1.0 / t);
             double nx = C.at<double>(0) * d;
             double ny = C.at<double>(1) * d;
+
+            // 3) nx^2 + ny^2 > 0.95
             if (hypot(nx, ny) > 0.95)
             {
                 continue;
             }
 
+            // 5) gamma = c3*d / nz
             double gamma = sqrt(C.at<double>(2) / C.at<double>(3));
 
             params.gamma1() = gamma;
@@ -532,6 +538,7 @@ CataCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
         }
     }
 
+    // Single View Point Omnidirectional Camera Calibration from Planar Grids 公式（2）
     // Lift normalised points to the sphere (inv_hslash)
     double xi = mParameters.xi();
     if (xi == 1.0)
@@ -613,13 +620,16 @@ CataCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 
     // Obtain a projective ray
     double xi = mParameters.xi();
+
     if (xi == 1.0)
     {
+        // Single View Point Omnidirectional Camera Calibration from Planar Grids 公式（8）
         P << mx_u, my_u, (1.0 - mx_u * mx_u - my_u * my_u) / 2.0;
     }
     else
     {
         // Reuse variable
+        // Single View Point Omnidirectional Camera Calibration from Planar Grids 公式（9）
         rho2_d = mx_u * mx_u + my_u * my_u;
         P << mx_u, my_u, 1.0 - xi * (rho2_d + 1.0) / (xi + sqrt(1.0 + (1.0 - xi * xi) * rho2_d));
     }
@@ -803,6 +813,8 @@ CataCamera::distortion(const Eigen::Vector2d& p_u, Eigen::Vector2d& d_u,
     my2_u = p_u(1) * p_u(1);
     mxy_u = p_u(0) * p_u(1);
     rho2_u = mx2_u + my2_u;
+
+    // Single View Point Omnidirectional Camera Calibration from Planar Grids 公式（4）
     rad_dist_u = k1 * rho2_u + k2 * rho2_u * rho2_u;
     d_u << p_u(0) * rad_dist_u + 2.0 * p1 * mxy_u + p2 * (rho2_u + 2.0 * mx2_u),
            p_u(1) * rad_dist_u + 2.0 * p2 * mxy_u + p1 * (rho2_u + 2.0 * my2_u);

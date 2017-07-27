@@ -8,24 +8,43 @@
 
 namespace camodocal
 {
-
+/**
+ * @brief 世界到相机
+ * @tparam T
+ * @param q_cam_odo 相机里程计旋转量
+ * @param t_cam_odo 相机里程计平移量
+ * @param p_odo
+ * @param att_odo 欧拉角
+ * @param q 输出 旋转量
+ * @param t 输出 平移量
+ * @param optimize_cam_odo_z 是否
+ */
 template<typename T>
 void
 worldToCameraTransform(const T* const q_cam_odo, const T* const t_cam_odo,
                        const T* const p_odo, const T* const att_odo,
                        T* q, T* t, bool optimize_cam_odo_z = true)
 {
+    // T(2) 这个只是2的数据类型转换为模板类型
+    // q_z = [ cos(\psi/2) 0 0 sin(\psi)]^T
+    // q_y = [cos(\theta/2) 0 sin(\theta/2) 0]^T
+    // q_x = [cos(\phi/2) 0 0 sin(\phi/2)]^T
+    // q = q_z \times q_y \times q_x 根据欧拉角旋转的顺序构造四元数（这个欧拉角定义的顺序跟一般的不太一样）
     Eigen::Quaternion<T> q_z_inv(cos(att_odo[0] / T(2)), T(0), T(0), -sin(att_odo[0] / T(2)));
     Eigen::Quaternion<T> q_y_inv(cos(att_odo[1] / T(2)), T(0), -sin(att_odo[1] / T(2)), T(0));
     Eigen::Quaternion<T> q_x_inv(cos(att_odo[2] / T(2)), -sin(att_odo[2] / T(2)), T(0), T(0));
 
+    // 旋转矩阵
     Eigen::Quaternion<T> q_zyx_inv = q_x_inv * q_y_inv * q_z_inv;
 
+    // 里程计旋转量
     T q_odo[4] = {q_zyx_inv.w(), q_zyx_inv.x(), q_zyx_inv.y(), q_zyx_inv.z()};
 
+    // -\psi -\theta -\phi
     T q_odo_cam[4] = {q_cam_odo[3], -q_cam_odo[0], -q_cam_odo[1], -q_cam_odo[2]};
 
     T q0[4];
+
     ceres::QuaternionProduct(q_odo_cam, q_odo, q0);
 
     T t0[3];
@@ -60,6 +79,7 @@ class ReprojectionError1
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    // 构造函数
     ReprojectionError1(const Eigen::Vector3d& observed_P,
                        const Eigen::Vector2d& observed_p)
         : m_observed_P(observed_P), m_observed_p(observed_p)
@@ -485,7 +505,10 @@ CostFunctionFactory::CostFunctionFactory()
 {
 
 }
-
+/**
+ * @brief 代价函数
+ * @return
+ */
 boost::shared_ptr<CostFunctionFactory>
 CostFunctionFactory::instance(void)
 {

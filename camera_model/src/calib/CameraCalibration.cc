@@ -38,6 +38,7 @@ CameraCalibration::CameraCalibration(const Camera::ModelType modelType,
  , m_squareSize(squareSize)
  , m_verbose(false)
 {
+    // 根据相机模型的种类，相机的名字，图片的大小，构造一个相机变量
     m_camera = CameraFactory::instance()->generateCamera(modelType, cameraName, imageSize);
 }
 
@@ -48,9 +49,15 @@ CameraCalibration::clear(void)
     m_scenePoints.clear();
 }
 
+/**
+ * @brief 添加棋盘格数据，包括图像坐标系中的2D点，世界坐标系中的3D点
+ * @param corners 角点图像坐标
+ */
 void
 CameraCalibration::addChessboardData(const std::vector<cv::Point2f>& corners)
 {
+    // 2D点就是图像中检测到角点坐标，3D点就是按第一个为世界坐标系的原点，其他按棋盘格的实际尺寸计算
+    // 可以理解为棋盘格静止，保持不动，所以3D点位置中的Z轴方向数据为0，棋格盘运动可以理解为就是相机在运动
     m_imagePoints.push_back(corners);
 
     std::vector<cv::Point3f> scenePointsInView;
@@ -86,6 +93,7 @@ CameraCalibration::calibrate(void)
     }
 
     // Compute measurement covariance.
+    // 计算相机测量协方差
     std::vector<std::vector<cv::Point2f> > errVec(m_imagePoints.size());
     Eigen::Vector2d errSum = Eigen::Vector2d::Zero();
     size_t errCount = 0;
@@ -429,11 +437,14 @@ CameraCalibration::calibrateHelper(CameraPtr& camera,
     tvecs.assign(m_scenePoints.size(), cv::Mat());
 
     // STEP 1: Estimate intrinsics
+    // SETP 1： 估计相机内参
     camera->estimateIntrinsics(m_boardSize, m_scenePoints, m_imagePoints);
 
     // STEP 2: Estimate extrinsics
+    // STEP 2： 估计相机外参
     for (size_t i = 0; i < m_scenePoints.size(); ++i)
     {
+        // 世界坐标系下的3D点，图像坐标系的2D点，求解的旋转量，求解的平移量
         camera->estimateExtrinsics(m_scenePoints.at(i), m_imagePoints.at(i), rvecs.at(i), tvecs.at(i));
     }
 
@@ -447,6 +458,7 @@ CameraCalibration::calibrateHelper(CameraPtr& camera,
     }
 
     // STEP 3: optimization using ceres
+    // 将上面求解的相机内参，相机外参，通过ceres优化重投影误差
     optimize(camera, rvecs, tvecs);
 
     if (m_verbose)
@@ -468,6 +480,7 @@ CameraCalibration::optimize(CameraPtr& camera,
     // Use ceres to do optimization
     ceres::Problem problem;
 
+    // 相机位置Transform类 R{q},t
     std::vector<Transform, Eigen::aligned_allocator<Transform> > transformVec(rvecs.size());
     for (size_t i = 0; i < rvecs.size(); ++i)
     {
@@ -484,6 +497,7 @@ CameraCalibration::optimize(CameraPtr& camera,
     m_camera->writeParameters(intrinsicCameraParams);
 
     // create residuals for each observation
+    // 创建每一个观测值的残差
     for (size_t i = 0; i < m_imagePoints.size(); ++i)
     {
         for (size_t j = 0; j < m_imagePoints.at(i).size(); ++j)
@@ -491,24 +505,34 @@ CameraCalibration::optimize(CameraPtr& camera,
             const cv::Point3f& spt = m_scenePoints.at(i).at(j);
             const cv::Point2f& ipt = m_imagePoints.at(i).at(j);
 
+            // 在CostFuntionFactory.cc 中定义了七种代价函数（generateCostFunction()），这个些不同的代价函数考虑了不同的优化对象，如相机位置、
+            // 2D3D特征点的位置、二视图、平方根精度等
+            // 向代价函数添加3D和2D观测值
             ceres::CostFunction* costFunction =
                 CostFunctionFactory::instance()->generateCostFunction(camera,
                                                                       Eigen::Vector3d(spt.x, spt.y, spt.z),
                                                                       Eigen::Vector2d(ipt.x, ipt.y),
                                                                       CAMERA_INTRINSICS | CAMERA_POSE);
 
+            // 损失函数
+            // 核函数，用来减小Outlier的影响
             ceres::LossFunction* lossFunction = new ceres::CauchyLoss(1.0);
+
+            // 设置残差
+            // 在这个函数中设置的相机内参、相机旋转量、相机平移量是优化过程中优化的变量
             problem.AddResidualBlock(costFunction, lossFunction,
                                      intrinsicCameraParams.data(),
                                      transformVec.at(i).rotationData(),
                                      transformVec.at(i).translationData());
         }
 
+        // LocalParameterization 对于每一个参数块只是在参数块的局部切空间产生扰动
         ceres::LocalParameterization* quaternionParameterization =
             new EigenQuaternionParameterization;
 
+        // 这个参数块设置一次后就不能被改变了
         problem.SetParameterization(transformVec.at(i).rotationData(),
-                                    quaternionParameterization);
+                                    d);
     }
 
     std::cout << "begin ceres" << std::endl;
@@ -525,6 +549,7 @@ CameraCalibration::optimize(CameraPtr& camera,
     ceres::Solve(options, &problem, &summary);
     std::cout << "end ceres" << std::endl;
 
+    // 是否输出ceres优化结果报告
     if (m_verbose)
     {
         std::cout << summary.FullReport() << std::endl;

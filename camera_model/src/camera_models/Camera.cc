@@ -119,6 +119,14 @@ Camera::mask(void) const
     return m_mask;
 }
 
+
+/**
+ * @brief 利用PnP估计相机外参
+ * @param objectPoints 物体世界坐标系下3D点
+ * @param imagePoints 图像坐标系下2D点
+ * @param rvec 输出相机旋转
+ * @param tvec 输出相机平移量
+ */
 void
 Camera::estimateExtrinsics(const std::vector<cv::Point3f>& objectPoints,
                            const std::vector<cv::Point2f>& imagePoints,
@@ -128,6 +136,8 @@ Camera::estimateExtrinsics(const std::vector<cv::Point3f>& objectPoints,
     for (size_t i = 0; i < Ms.size(); ++i)
     {
         Eigen::Vector3d P;
+
+        // 将点从理想图像坐标系转换到实际图像坐标系
         liftProjective(Eigen::Vector2d(imagePoints.at(i).x, imagePoints.at(i).y), P);
 
         P /= P(2);
@@ -137,6 +147,7 @@ Camera::estimateExtrinsics(const std::vector<cv::Point3f>& objectPoints,
     }
 
     // assume unit focal length, zero principal point, and zero distortion
+    // 通过PnP求解相机外参
     cv::solvePnP(objectPoints, Ms, cv::Mat::eye(3, 3, CV_64F), cv::noArray(), rvec, tvec);
 }
 

@@ -166,7 +166,10 @@ int main(int argc, char** argv)
 
         camodocal::Chessboard chessboard(boardSize, image);
 
+        // 是否使用OpenCV库，是通过用户进行配置
         chessboard.findCorners(useOpenCV);
+
+        // 棋盘格角点是否找到了？
         if (chessboard.cornersFound())
         {
             if (verbose)
@@ -174,11 +177,13 @@ int main(int argc, char** argv)
                 std::cerr << "# INFO: Detected chessboard in image " << i + 1 << ", " << imageFilenames.at(i) << std::endl;
             }
 
+            // 向calibration类传递棋盘格检测结果
             calibration.addChessboardData(chessboard.getCorners());
 
             cv::Mat sketch;
             chessboard.getSketch().copyTo(sketch);
 
+            // 显示棋盘格检测结果
             cv::imshow("Image", sketch);
             cv::waitKey(50);
         }
@@ -203,6 +208,7 @@ int main(int argc, char** argv)
 
     double startTime = camodocal::timeInSeconds();
 
+    // 开始相机校准
     calibration.calibrate();
     calibration.writeParams(cameraName + "_camera_calib.yaml");
     calibration.writeChessboardData(cameraName + "_chessboard_data.dat");
