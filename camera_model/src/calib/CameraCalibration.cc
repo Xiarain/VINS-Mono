@@ -77,6 +77,7 @@ CameraCalibration::calibrate(void)
     int imageCount = m_imagePoints.size();
 
     // compute intrinsic camera parameters and extrinsic parameters for each of the views
+    // 计算每一帧的相机内参和外参
     std::vector<cv::Mat> rvecs;
     std::vector<cv::Mat> tvecs;
     bool ret = calibrateHelper(m_camera, rvecs, tvecs);
@@ -100,12 +101,17 @@ CameraCalibration::calibrate(void)
     for (size_t i = 0; i < m_imagePoints.size(); ++i)
     {
         std::vector<cv::Point2f> estImagePoints;
+
+        // 3D点投影到2D点
         m_camera->projectPoints(m_scenePoints.at(i), rvecs.at(i), tvecs.at(i),
                                 estImagePoints);
 
         for (size_t j = 0; j < m_imagePoints.at(i).size(); ++j)
         {
+            // 观测值
             cv::Point2f pObs = m_imagePoints.at(i).at(j);
+
+            // 估计值
             cv::Point2f pEst = estImagePoints.at(j);
 
             cv::Point2f err = pObs - pEst;
@@ -118,6 +124,7 @@ CameraCalibration::calibrate(void)
         errCount += m_imagePoints.at(i).size();
     }
 
+    // 平均值
     Eigen::Vector2d errMean = errSum / static_cast<double>(errCount);
 
     Eigen::Matrix2d measurementCovariance = Eigen::Matrix2d::Zero();
@@ -532,7 +539,7 @@ CameraCalibration::optimize(CameraPtr& camera,
 
         // 这个参数块设置一次后就不能被改变了
         problem.SetParameterization(transformVec.at(i).rotationData(),
-                                    d);
+                                    quaternionParameterization);
     }
 
     std::cout << "begin ceres" << std::endl;

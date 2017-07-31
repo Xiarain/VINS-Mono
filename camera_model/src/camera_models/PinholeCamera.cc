@@ -356,7 +356,7 @@ PinholeCamera::estimateIntrinsics(const cv::Size& boardSize,
 
     Parameters params = getParameters();
 
-    params.k1d() = 0.0;
+    params.k1() = 0.0;
     params.k2() = 0.0;
     params.p1() = 0.0;
     params.p2() = 0.0;

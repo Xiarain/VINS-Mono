@@ -23,6 +23,7 @@ bool first_image_flag = true;
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
+    // 是否是第一幅图像，如果是则记下当前图像帧的时间
     if(first_image_flag)
     {
         first_image_flag = false;
@@ -30,6 +31,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
 
     // frequency control
+    // 图像频率的确定
     if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
     {
         PUB_THIS_FRAME = true;
