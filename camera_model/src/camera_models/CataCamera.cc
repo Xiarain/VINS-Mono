@@ -446,6 +446,7 @@ CataCamera::estimateIntrinsics(const cv::Size& boardSize,
 
             for (size_t j = 0; j < objectPoints.size(); ++j)
             {
+                // 估计外参
                 estimateExtrinsics(objectPoints.at(j), imagePoints.at(j), rvecs.at(j), tvecs.at(j));
             }
 

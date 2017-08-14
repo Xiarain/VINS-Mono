@@ -3,7 +3,7 @@
 ### 系统启动命令
 $roslaunch vins_estimator euroc.launch \
 $roslaunch vins_estimator vins_rviz.launch \
-$rosbag play YOUR_PATH_TO_DATASET/MH_05_difficult.bag \
+$rosbag play YOUR_PATH_TO_DATASET/MH_03_medium.bag \
 $roslaunch benchmark_publisher publish.launch  sequence_name:=MH_03_medium
 
 ### 文件目录概述
@@ -49,10 +49,28 @@ $roslaunch benchmark_publisher publish.launch  sequence_name:=MH_03_medium
 
 ##### 相机矫正过程
 
+图像矫正可通过两种方式执行，分别为正向矫正和逆向矫正[参考博客](http://www.cnblogs.com/dzyBK/p/5579206.html)。正向矫正是通过畸变坐标算出标准坐标，而逆向矫正是通过标准坐标算出畸变坐标。
+Opencv中UndistortPoints就是执行的正向矫正过程，而initUndistortRectifyMap执行的是逆向矫正过程。\
+正向矫正的流程为：畸变像素坐标→畸变物理坐标→标准物理坐标→标准像素坐标。\
+逆向矫正的流程为：标准像素坐标→标准物理坐标→畸变物理坐标→畸变像素坐标。
 * initUndistortRectifyMap()
   * spaceToPlane()
     * distortion()
+##### 特征点跟踪过程
+* FeatureTracker::readIntrinsicParameter() 读取相机内参
+* 读取mask图片（鱼眼相机）
+* img_callback() ROS回调函数
+  * FeatureTracker::readImage()
+    * cv::createCLAHE() 直方图均衡化（可选）
+    * cv::calcOpticalFlowPyrLK() LK金字塔光流法(同时会去除那些无法追踪到的特征点)
+    * FeatureTracker::rejectWithF() 通过F矩阵去除外点
+    * FeatureTracker::setMask() 设置遮挡部分（鱼眼相机）
+    * cv::goodFeaturesToTrack() 添加角点(第一帧初始化特征点检测也是通过这里完成的)
+    * FeatureTracker::addPoints() 添加新检测到的特征点
+  * FeatureTracker::undistortedPoints() 将所有特征点转换到一个标准化平面并且进行畸变
+  * 发送图像帧
 
+#### IMU
 **IMU measurement model** \
 Technical Report VINS_Mono 公式(17)
 $$

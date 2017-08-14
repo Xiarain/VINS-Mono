@@ -454,7 +454,7 @@ PinholeCamera::liftSphere(const Eigen::Vector2d& p, Eigen::Vector3d& P) const
 
 /**
  * \brief Lifts a point from the image plane to its projective ray
- *        从图像平面到投射光线的一个点
+ *        从图像平面到投射光线的一个点，将一个点从图像坐标系转换到像素坐标系
  * \param p image coordinates
  * \param P coordinates of the projective ray
  */
@@ -466,9 +466,13 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     //double lambda;
 
     // Lift points to normalised plane
+    // TODO 将点转换为标准化平面？？？
+    // 将点转换为标准平面
+    // 逆向变换
     mx_d = m_inv_K11 * p(0) + m_inv_K13; // 1/fx * x - u0/fx
     my_d = m_inv_K22 * p(1) + m_inv_K23; // 1/fy * y - v0/fy
 
+    // 如果有畸变参数则为true
     if (m_noDistortion)
     {
         mx_u = mx_d;
@@ -501,11 +505,12 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
         else
         {
             // Recursive distortion model
+            // TODO 递归畸变模型
             int n = 8;
             Eigen::Vector2d d_u;
             distortion(Eigen::Vector2d(mx_d, my_d), d_u);
             // Approximate value
-            mx_u = mx_d - d_u(0);
+            mx_u = mx_d - d_u(0); // mx_u my_u 是较小的数
             my_u = my_d - d_u(1);
 
             for (int i = 1; i < n; ++i)
@@ -655,7 +660,7 @@ PinholeCamera::undistToPlane(const Eigen::Vector2d& p_u, Eigen::Vector2d& p) con
 
 /**
  * \brief Apply distortion to input point (from the normalised plane)
- *        利用畸变模型对输入的点进行畸变
+ *        利用畸变模型对输入的点进行畸变（从标准化平面）
  * \param p_u undistorted coordinates of point on the normalised plane
  * \return to obtain the distorted point: p_d = p_u + d_u
  */
@@ -789,7 +794,7 @@ PinholeCamera::initUndistortRectifyMap(cv::Mat& map1, cv::Mat& map2,
     Eigen::Matrix3f K_rect;
 
 
-    // TODO 如果 cx cy 是 -1，则让cx cy为图像大小的额一半？
+    // 如果 cx cy 是 -1，则让cx cy为图像大小的一半
     if (cx == -1.0f || cy == -1.0f)
     {
         K_rect << fx, 0, imageSize.width / 2,
