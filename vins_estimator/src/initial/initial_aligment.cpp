@@ -1,5 +1,10 @@
 #include "initial_alignment.h"
 
+/**
+ * @brief IMU陀螺仪零偏初始化
+ * @param all_image_frame 图像观测值与IMU预积分
+ * @param Bgs 输出陀螺仪的零偏
+ */
 void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
 {
     Matrix3d A;
@@ -17,13 +22,19 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
         VectorXd tmp_b(3);
         tmp_b.setZero();
 
-        // Technical Report VINS-Mono 公式（15） TODO
+        // Technical Report VINS-Mono 公式（15）
+        // 把公式（15）第二条公式带入第一条公式
+        // 然后把[1 bg]这个四元数拆解分为[0 bg] + [1 0]
+        // TODO 公式推到出来的跟实际代码对应不上，tmp_A 应该还需要乘以frame_j->second.pre_integration->delta_q.inverse() * q_ij
         Eigen::Quaterniond q_ij(frame_i->second.R.transpose() * frame_j->second.R);
 
+        // O_R O_BG是矩阵的位置
         tmp_A = frame_j->second.pre_integration->jacobian.template block<3, 3>(O_R, O_BG);
+
+        // Eigen::quanternion.vec() 返回四元数的虚部
         tmp_b = 2 * (frame_j->second.pre_integration->delta_q.inverse() * q_ij).vec();
 
-        // A.T Ax=A.Tb
+        // 使用Eigen ldlt矩阵分解方法，需要将Ax=b这种形式转换为 A.T Ax=A.T b
         A += tmp_A.transpose() * tmp_A;
         b += tmp_A.transpose() * tmp_b;
 
@@ -44,7 +55,11 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
     }
 }
 
-
+/**
+ * @brief 计算重力加速度中的b1和b2
+ * @param g0 初略估计的重力加速度
+ * @return b1 b2 重力加速度分向量
+ */
 MatrixXd TangentBasis(Vector3d &g0)
 {
     Vector3d b, c;
@@ -64,6 +79,12 @@ MatrixXd TangentBasis(Vector3d &g0)
     return bc;
 }
 
+/**
+ * @brief 进一步细化重力加速度，提高估计值的精度
+ * @param all_image_frame 图像观测值与IMU预积分
+ * @param g 输入粗略估计的重力加速度，经过细化后输出
+ * @param x 输出对齐后的速度、重力加速度、尺度因子
+ */
 void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     Vector3d g0 = g.normalized() * G.norm();
@@ -81,7 +102,8 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
     map<double, ImageFrame>::iterator frame_j;
     for(int k = 0; k < 4; k++)
     {
-        // b1 b2
+        // lxly的形式:b1
+        //           b2
         MatrixXd lxly(3, 2);
         lxly = TangentBasis(g0);
         int i = 0;
@@ -142,6 +164,13 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
     g = g0;
 }
 
+/**
+ * @brief 速度，重力向量，尺度初始化
+ * @param all_image_frame 图像观测值与IMU预积分
+ * @param g 输出重力加速度
+ * @param x 输出对齐后的速度、重力加速度、尺度因子
+ * @return
+ */
 bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     // 所有的帧数
@@ -177,15 +206,16 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         VectorXd tmp_b(6);
         tmp_b.setZero();
 
-        // Robust Initialization of Monocular Visual-Inertial Estimation on Aerial Robots 公式（7）
+        // Technical Report VINS-Mone 公式（17）~(18)
         double dt = frame_j->second.pre_integration->sum_dt;
 
+        // TODO tmp_A.block<3, 3>(0, 0)缺一个frame_i->second.R.transpose()
         tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 6) = frame_i->second.R.transpose() * dt * dt / 2 * Matrix3d::Identity();
         tmp_A.block<3, 1>(0, 9) = frame_i->second.R.transpose() * (frame_j->second.T - frame_i->second.T) / 100.0;     
 
         // TIC: camera和IMU外参的平移量，从外部参数列表获得
-        // 前部分是IMU预计分中的位置预计分，但是后面半部分是？ \TODO
+        // TODO 前部分是IMU预计分中的位置预计分，但是后面半部分是？
         tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * TIC[0] - TIC[0];
         //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
 
@@ -245,10 +275,20 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return true;
 }
 
+/**
+ * @brief camera与IMU对齐
+ * @param all_image_frame 图像观测值与IMU预积分
+ * @param Bgs 输出陀螺仪零偏
+ * @param g 输出重力加速度
+ * @param x 输出对齐后的速度、重力加速度、尺度因子
+ * @return
+ */
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
 {
+    // IMU陀螺仪零偏初始化
     solveGyroscopeBias(all_image_frame, Bgs);
 
+    // 速度，重力向量，尺度初始化
     if(LinearAlignment(all_image_frame, g, x))
         return true;
     else 

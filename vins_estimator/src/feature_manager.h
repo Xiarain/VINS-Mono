@@ -15,6 +15,7 @@ using namespace Eigen;
 
 #include "parameters.h"
 
+// 图像中2D特征点
 class FeaturePerFrame
 {
   public:
@@ -32,6 +33,7 @@ class FeaturePerFrame
     double dep_gradient;
 };
 
+// 空间3D特征点
 class FeaturePerId
 {
   public:
@@ -42,7 +44,7 @@ class FeaturePerId
     int used_num;
     bool is_outlier;
     bool is_margin;
-    double estimated_depth;
+    double estimated_depth; // 三角化估计的深度
     int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
 
     Vector3d gt_p;

@@ -9,6 +9,8 @@
 
 #include <ceres/ceres.h>
 
+// SizedCostFunction： 第一个为残差的数量，其他后续为parameter block的大小
+// 这里第一个为residual数量为15，其他一共有四个parameter block，其中他们的大小分别是7， 9， 7， 9
 class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 {
   public:
@@ -63,6 +65,7 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 
         Eigen::Matrix<double, 15, 15> sqrt_info = Eigen::LLT<Eigen::Matrix<double, 15, 15>>(pre_integration->covariance.inverse()).matrixL().transpose();
         //sqrt_info.setIdentity();
+        // 协方差矩阵作为优化相机、IMU和先验之间的比例系数
         residual = sqrt_info * residual;
 
         if (jacobians)
@@ -83,6 +86,13 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 ///                ROS_BREAK();
             }
 
+            // jacobians[0] jacobian_pose_i
+            // jacobians[1] jacobian_speedbias_i
+            // jacobians[2] jacobian_pose_j
+            // jacobians[3] jacobian_speedbias_j
+            // Techical Report VINS-Mono 公式（22）
+            // 对公式（22）IMU Model求雅克比矩阵
+            // TODO 公式大部分能说的通，但是jacobians[0]~jacobians[3]是怎么出来的或者他们之间的区别是什么？？？
             if (jacobians[0])
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);

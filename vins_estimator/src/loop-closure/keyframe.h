@@ -93,9 +93,13 @@ public:
 	// data 
 	double header;
 	std::vector<Eigen::Vector3d> point_clouds, point_clouds_matched;
+
 	//feature in origin image plane
+  // 特征点在原始图像平面
 	std::vector<cv::Point2f> measurements, measurements_matched;
+
 	//feature in normalize image plane
+	// 特征点在归一化平面
 	std::vector<cv::Point2f> pts_normalize;
 	//feature ID
 	std::vector<int> features_id, features_id_matched;

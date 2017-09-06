@@ -550,10 +550,15 @@ TemplatedVocabulary<TDescriptor,F>::operator=
 }
 
 // --------------------------------------------------------------------------
-
+/**
+ * @brief 生成词典
+ * @tparam TDescriptor
+ * @tparam F
+ * @param training_features
+ */
 template<class TDescriptor, class F>
 void TemplatedVocabulary<TDescriptor,F>::create(
-  const std::vector<std::vector<TDescriptor> > &training_features)
+  const std::vector<std::vector<TDescriptor> > &training_features) // 图像特征集合
 {
   m_nodes.clear();
   m_words.clear();

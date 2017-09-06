@@ -63,6 +63,11 @@ class Utility
         return ans;
     }
 
+    /**
+     * @brief 旋转矩阵转换为欧拉角
+     * @param R 旋转矩阵
+     * @return 欧拉角
+     */
     static Eigen::Vector3d R2ypr(const Eigen::Matrix3d &R)
     {
         Eigen::Vector3d n = R.col(0);
@@ -80,6 +85,12 @@ class Utility
         return ypr / M_PI * 180.0;
     }
 
+    /**
+     * @brief 欧拉角转换旋转矩阵
+     * @tparam Derived
+     * @param ypr
+     * @return
+     */
     template <typename Derived>
     static Eigen::Matrix<typename Derived::Scalar, 3, 3> ypr2R(const Eigen::MatrixBase<Derived> &ypr)
     {

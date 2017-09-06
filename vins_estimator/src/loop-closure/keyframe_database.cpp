@@ -74,12 +74,19 @@ void KeyFrameDatabase::add(KeyFrame* pKF)
 	ROS_DEBUG("add keyframe end!");
 
 }
-
+/**
+ * @brief 降低采样
+ * @param erase_index 输出被删除的关键帧序号
+ */
 void KeyFrameDatabase::downsample(vector<int> &erase_index)
 {
 	ROS_DEBUG("resample keyframe begin!");
+
 	unique_lock<mutex> lock(mMutexkeyFrameList);
+
+	// 关键帧队列中的关键帧数量
 	int frame_num = (int)keyFrameList.size();
+
 	if (mOptimiazationPosegraph.try_lock())
 	{
 		erase_index.clear();
@@ -87,12 +94,21 @@ void KeyFrameDatabase::downsample(vector<int> &erase_index)
 
 		list<KeyFrame*>::iterator it = keyFrameList.begin();
 		Vector3d last_P = Vector3d(0, 0, 0);
+
+		// 遍历关键帧链表
 		for (; it != keyFrameList.end(); )   
 		{
 			Vector3d tmp_t;
 			Matrix3d tmp_r;
+
+			// 角度在这里没有被考虑
 			(*it)->getPose(tmp_t, tmp_r);
+
+			// last_p：遍历整个链表，离it最近被保留下来的关键帧last_p
+			// 计算距离
 			double dis = (tmp_t - last_P).norm();
+
+				// 当it为关键帧库中的第一帧或者是两帧之间的距离大于阀值或者是该关键帧闭环过
 		    if(it == keyFrameList.begin() || dis > min_dis || (*it)->has_loop || (*it)->is_looped)
 		    {
 		    	last_P = tmp_t;
@@ -101,7 +117,11 @@ void KeyFrameDatabase::downsample(vector<int> &erase_index)
 		    else
 		    {
 		    	erase_index.push_back((*it)->global_index);
+
+					// 删除关键帧
 		    	delete (*it);
+
+					// 返回在队列中被删除的下一个
 		    	it = keyFrameList.erase(it);
 		    }
 		}
@@ -405,19 +425,31 @@ void KeyFrameDatabase::updateVisualization()
 	}
 	ROS_DEBUG("updateVisualization end");
 }
-
+/**
+ * @brief 向关键帧数据库中添加闭环序号,更新闭环显示
+ * @param loop_index 关键帧库中与当前关键帧匹配上的序号
+ */
 void KeyFrameDatabase::addLoop(int loop_index)
 {
 	unique_lock<mutex> lock(mPosegraphVisualization);
 	if (earliest_loop_index > loop_index || earliest_loop_index == -1)
 		earliest_loop_index = loop_index;
 
+	// 当前关键帧
 	KeyFrame* cur_KF = getLastKeyframe();
+
+	// 关键帧库中与当前关键帧匹配上的关键帧
 	KeyFrame* connected_KF = getKeyframe(loop_index);
 	Vector3d conncected_P, P;
 	Matrix3d connected_R, R;
+
+	// 当前关键帧的变换矩阵
 	cur_KF->getPose(P, R);
+
+	// 关键帧库中关键帧的变换矩阵
 	connected_KF->getPose(conncected_P, connected_R);
+
+	// 更新显示
 	posegraph_visualization->add_loopedge(P, conncected_P);
 }
 
@@ -427,6 +459,10 @@ nav_msgs::Path KeyFrameDatabase::getPath()
 	return refine_path;
 }
 
+/**
+ * @brief 返回位图可视化
+ * @return
+ */
 CameraPoseVisualization* KeyFrameDatabase::getPosegraphVisualization()
 {
 	unique_lock<mutex> lock(mPosegraphVisualization);

@@ -15,11 +15,24 @@ LoopClosure::LoopClosure(const char *_voc_file, int _image_w, int _image_h)
     printf(" loop closure init finish\n");
 }
 
+/**
+ * @brief 初始化相机模型
+ * @param calib_file 相机模型的名称
+ */
 void LoopClosure::initCameraModel(const std::string &calib_file)
 {
       demo.initCameraModel(calib_file);
 }
 
+/**
+ * @brief 开始闭环检测
+ * @param keys 3D特征点位置
+ * @param descriptors 描述子
+ * @param cur_pts 当前帧
+ * @param old_pts
+ * @param old_index 匹配上的关键帧序号
+ * @return
+ */
 bool LoopClosure::startLoopClosure(std::vector<cv::KeyPoint> &keys, std::vector<BRIEF::bitset> &descriptors,
                                    std::vector<cv::Point2f> &cur_pts,
                                    std::vector<cv::Point2f> &old_pts,

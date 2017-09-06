@@ -466,7 +466,6 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     //double lambda;
 
     // Lift points to normalised plane
-    // TODO 将点转换为标准化平面？？？
     // 将点转换为标准平面
     // 逆向变换
     mx_d = m_inv_K11 * p(0) + m_inv_K13; // 1/fx * x - u0/fx
@@ -551,7 +550,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p) const
         // Apply distortion
         Eigen::Vector2d d_u;
 
-        // 利用畸变模型对输入的点进行畸变
+        // 利用畸变模型对输入的点进行矫正
         distortion(p_u, d_u);
         p_d = p_u + d_u;
     }

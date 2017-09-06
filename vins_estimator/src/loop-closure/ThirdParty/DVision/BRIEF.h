@@ -41,6 +41,7 @@ class BRIEF
 public:
 
   /// Bitset type
+  // vector<bool> 类似，同样存储二进制位,提供丰富的位运算，同时长度又是动态可变的
   typedef boost::dynamic_bitset<> bitset;
 
   /// Type of pairs

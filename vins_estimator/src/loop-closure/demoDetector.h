@@ -154,6 +154,19 @@ void demoDetector<TVocabulary, TDetector, TDescriptor>::eraseIndex
 
 // ---------------------------------------------------------------------------
 
+/**
+ * @brief 进行闭环检测
+ * @tparam TVocabulary
+ * @tparam TDetector
+ * @tparam TDescriptor
+ * @param name 字符格式，特征点的种类
+ * @param keys 当前帧的特征点
+ * @param descriptors 当前帧的描述子
+ * @param cur_pts
+ * @param old_pts
+ * @param old_index
+ * @return
+ */
 template<class TVocabulary, class TDetector, class TDescriptor>
 bool demoDetector<TVocabulary, TDetector, TDescriptor>::run
   (const std::string &name, const std::vector<cv::KeyPoint> &keys, 
@@ -167,7 +180,7 @@ bool demoDetector<TVocabulary, TDetector, TDescriptor>::run
   DetectionResult result;
 
   detector.detectLoop(keys, descriptors, result, cur_pts, old_pts); 
-    
+
   if(result.detection())
   {
       //cout << "- loop found with image " << result.match << "!"

@@ -35,7 +35,13 @@ BRIEF::~BRIEF()
 }
 
 // ---------------------------------------------------------------------------
-
+/**
+ * @brief 计算一幅图像中相应特征点的描述子
+ * @param image 输入图像
+ * @param points 输入2D图像关键点
+ * @param descriptors （out）输出描述子
+ * @param treat_image 是否是一个图像
+ */
 void BRIEF::compute(const cv::Mat &image, 
     const std::vector<cv::KeyPoint> &points,
     vector<bitset> &descriptors,
@@ -45,6 +51,8 @@ void BRIEF::compute(const cv::Mat &image,
   const cv::Size ksize(9, 9);
   
   cv::Mat im;
+
+  // 如果是图像的话，需要转换为灰度图像，并且需要高斯模糊
   if(treat_image)
   {
     cv::Mat aux;
@@ -80,6 +88,8 @@ void BRIEF::compute(const cv::Mat &image,
   int x1, y1, x2, y2;
   
   dit = descriptors.begin();
+
+  // 计算每一个特征点的brief描述子
   for(kit = points.begin(); kit != points.end(); ++kit, ++dit)
   {
     dit->resize(m_bit_length);
@@ -91,10 +101,12 @@ void BRIEF::compute(const cv::Mat &image,
       y1 = (int)(kit->pt.y + m_y1[i]);
       x2 = (int)(kit->pt.x + m_x2[i]);
       y2 = (int)(kit->pt.y + m_y2[i]);
-      
+
+      // 看是否超出图像范围
       if(x1 >= 0 && x1 < W && y1 >= 0 && y1 < H 
         && x2 >= 0 && x2 < W && y2 >= 0 && y2 < H)
       {
+        // 比较这一对位置的两个灰度值大小
         if( im.ptr<unsigned char>(y1)[x1] < im.ptr<unsigned char>(y2)[x2] )
         {
           dit->set(i);
@@ -127,7 +139,8 @@ void BRIEF::generateTestPoints()
   const int max_v = m_patch_size / 2;
   
   DUtils::Random::SeedRandOnce();
-  
+
+  // 高斯随机分布
   for(int i = 0; i < m_bit_length; ++i)
   {
     int x1, y1, x2, y2;

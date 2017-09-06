@@ -15,8 +15,14 @@ CameraPoseVisualization keyframebasevisual(0.0, 0.0, 1.0, 1.0);
 static double sum_of_path = 0;
 static Vector3d last_path(0.0, 0.0, 0.0);
 
+/**
+ * @brief 登记ROS消息，主要是用于RVIZ中显示
+ * @param n ros::NodeHandle
+ */
 void registerPub(ros::NodeHandle &n)
 {
+    // 一个名字为imu_propagate的话题上发布一个std_msgs/String类型的消息，这就使得主机告诉了所有订阅了imu_propagate话题的节点，
+    // 我们将在这个话题上发布数据。第二个参数是发布队列的大小
     pub_latest_odometry = n.advertise<nav_msgs::Odometry>("imu_propagate", 1000);
     pub_path = n.advertise<nav_msgs::Path>("path_no_loop", 1000);
     pub_loop_path = n.advertise<nav_msgs::Path>("path", 1000);
@@ -92,6 +98,13 @@ void printStatistics(const Estimator &estimator, double t)
     ROS_DEBUG("sum of path %f", sum_of_path);
 }
 
+/**
+ * @brief 发送ROS里程计信息
+ * @param estimator vio估计器
+ * @param header 帧头
+ * @param loop_correct_t
+ * @param loop_correct_r
+ */
 void pubOdometry(const Estimator &estimator, const std_msgs::Header &header, Eigen::Vector3d loop_correct_t,
                 Eigen::Matrix3d loop_correct_r)
 {
@@ -236,6 +249,7 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header, E
     point_cloud.header = header;
     loop_point_cloud.header = header;
 
+    // estimator.f_manager.feature 全局特征点，每一个都是唯一确定的
     for (auto &it_per_id : estimator.f_manager.feature)
     {
         int used_num;
@@ -245,6 +259,8 @@ void pubPointCloud(const Estimator &estimator, const std_msgs::Header &header, E
         if (it_per_id.start_frame > WINDOW_SIZE * 3.0 / 4.0 || it_per_id.solve_flag != 1)
             continue;
         int imu_i = it_per_id.start_frame;
+
+        //X=x*z, Y=y*z, Z=z;
         Vector3d pts_i = it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth;
         Vector3d w_pts_i = loop_correct_r * estimator.Rs[imu_i] * (estimator.ric[0] * pts_i + estimator.tic[0])
                               + loop_correct_r * estimator.Ps[imu_i] + loop_correct_t;
@@ -302,7 +318,7 @@ void updateLoopPath(nav_msgs::Path _loop_path)
 }
 
 /**
- * @brief  发布TF关系树
+ * @brief 发布TF关系树
  * @param estimator 全局与局部关系估计值
  * @param header 帧头
  * @param loop_correct_t 闭环纠正偏移量
@@ -333,6 +349,7 @@ void pubTF(const Estimator &estimator, const std_msgs::Header &header, Eigen::Ve
     br.sendTransform(tf::StampedTransform(transform, header.stamp, "world", "body"));
 
     // camera frame
+    // 将IMU作为机体坐标系，body坐标系到camera坐标系就是IMU到camera之间的外参
     transform.setOrigin(tf::Vector3(estimator.tic[0].x(),
                                     estimator.tic[0].y(),
                                     estimator.tic[0].z()));

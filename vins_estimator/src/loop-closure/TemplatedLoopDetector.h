@@ -579,6 +579,14 @@ TemplatedLoopDetector<TDescriptor,F>::TemplatedLoopDetector
 
 // --------------------------------------------------------------------------
 
+/// TDescriptor: class of descriptor
+/// F: class of descriptor functions
+/**
+ * @brief 通过给定的字典创建DBoW2数据库
+ * @tparam TDescriptor 描述子类
+ * @tparam F 描述子函数类
+ * @param voc 字典
+ */
 template<class TDescriptor, class F>
 void TemplatedLoopDetector<TDescriptor,F>::setVocabulary
   (const TemplatedVocabulary<TDescriptor, F>& voc)
@@ -684,6 +692,17 @@ TemplatedLoopDetector<TDescriptor, F>::getVocabulary() const
 
 // --------------------------------------------------------------------------
 
+/**
+ * @brief 闭环检测
+ * @tparam TDescriptor 描述子类
+ * @tparam F TDescriptor 描述子函数类
+ * @param keys 当前图像中的关键点
+ * @param descriptors 当前图像中的描述子
+ * @param match 匹配或失败的结果信息
+ * @param cur_pts
+ * @param old_pts
+ * @return
+ */
 template<class TDescriptor, class F>
 bool TemplatedLoopDetector<TDescriptor, F>::detectLoop(
   const std::vector<cv::KeyPoint> &keys, 
@@ -692,12 +711,15 @@ bool TemplatedLoopDetector<TDescriptor, F>::detectLoop(
   std::vector<cv::Point2f> &cur_pts,
   std::vector<cv::Point2f> &old_pts)
 {
+  // m_database 数据库
   EntryId entry_id = m_database->size();
   match.query = entry_id;
   
   BowVector bowvec;
   FeatureVector featvec;
-  
+
+  // GEOM_DI：type of geometrical check
+  // 将描述子转换为bow容器和特征容器
   if(m_params.geom_check == GEOM_DI)
     m_database->getVocabulary()->transform(descriptors, bowvec, featvec,
       m_params.di_levels);

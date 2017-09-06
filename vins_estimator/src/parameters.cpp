@@ -78,6 +78,10 @@ void readParameters(ros::NodeHandle &n)
     G.z() = fsSettings["g_norm"];
 
     ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
+    // ESTIMATE_EXTRINSIC 取值为0,1,2
+    // 0：固定外参，不进行优化
+    // 1：在初始化完成后，进行外参的优化
+    // 2：没有外部先验矫正，纯粹靠系统内部校准
     if (ESTIMATE_EXTRINSIC == 2)
     {
         ROS_WARN("have no prior about extrinsic param, calibrate extrinsic param");

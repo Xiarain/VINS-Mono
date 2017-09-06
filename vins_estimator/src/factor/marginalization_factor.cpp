@@ -174,6 +174,8 @@ void* ThreadsConstructA(void* threadsstruct)
 void MarginalizationInfo::marginalize()
 {
     int pos = 0;
+
+    // parameter_block_idx 局部大小
     for (auto &it : parameter_block_idx)
     {
         it.second = pos;
@@ -182,6 +184,7 @@ void MarginalizationInfo::marginalize()
 
     m = pos;
 
+    // parameter_block_size 全局大小
     for (const auto &it : parameter_block_size)
     {
         if (parameter_block_idx.find(it.first) == parameter_block_idx.end())
@@ -318,18 +321,31 @@ std::vector<double *> MarginalizationInfo::getParameterBlocks(std::unordered_map
     return keep_block_addr;
 }
 
+/**
+ * @brief 配置ceres mutable_parameter_block_sizes和set_num_residuals
+ * @param _marginalization_info
+ */
 MarginalizationFactor::MarginalizationFactor(MarginalizationInfo* _marginalization_info):marginalization_info(_marginalization_info)
 {
     int cnt = 0;
     for (auto it : marginalization_info->keep_block_size)
     {
+        // Ceres::CostFunction::mutable_parameter_block_sizes
         mutable_parameter_block_sizes()->push_back(it);
         cnt += it;
     }
     //printf("residual size: %d, %d\n", cnt, n);
+    // Ceres::CostFunction::set_num_residuals：设置残差数量
     set_num_residuals(marginalization_info->n);
 };
 
+/**
+ * @brief 计算残差向量和雅克比矩阵
+ * @param parameters 参数块队列，与CostFunction::parameter_block_sizes_参数个数是一样的
+ * @param residuals 残差队列，与num_residuals_队列的长度是一样的
+ * @param jacobians
+ * @return
+ */
 bool MarginalizationFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     //printf("internal addr,%d, %d\n", (int)parameter_block_sizes().size(), num_residuals());

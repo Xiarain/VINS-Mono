@@ -70,6 +70,11 @@ void CameraPoseVisualization::add_edge(const Eigen::Vector3d& p0, const Eigen::V
     m_markers.push_back(marker);
 }
 
+/**
+ * @brief 更新关键帧库中闭环显示
+ * @param p0 当前关键帧
+ * @param p1 关键帧库中关键帧
+ */
 void CameraPoseVisualization::add_loopedge(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1){
     visualization_msgs::Marker marker;
 

@@ -335,6 +335,15 @@ TemplatedDatabase<TDescriptor, F>::TemplatedDatabase
 
 // --------------------------------------------------------------------------
 
+/**
+ * @brief 构造函数，设置字典
+ * @tparam TDescriptor
+ * @tparam F
+ * @tparam T
+ * @param voc
+ * @param use_di
+ * @param di_levels
+ */
 template<class TDescriptor, class F>
 template<class T>
 TemplatedDatabase<TDescriptor, F>::TemplatedDatabase

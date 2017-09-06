@@ -9,7 +9,7 @@ InitialEXRotation::InitialEXRotation(){
 }
 
 /**
- * @brief  通过对齐camera和IMU旋转的序列中求得camera和IMU旋转偏移常量
+ * @brief  通过对齐camera和IMU旋转的序列中求得camera与IMU之间的旋转偏移常量
  * @param corres 两幅图像中的匹配角点
  * @param delta_q_imu IMU预积分值
  * @param calib_ric_result SVD分解奇异值向量
@@ -20,7 +20,7 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
     // Moncular Visual-Inertial State Estimation With Online Initializaiton 公式（5）
     frame_count++;
 
-    // 通过图像匹配角点获得两个图像之间的旋转量
+    // Rc 通过图像匹配角点获得两个图像之间的旋转量
     Rc.push_back(solveRelativeR(corres));
 
     // 通过IMU预计分获得旋转量

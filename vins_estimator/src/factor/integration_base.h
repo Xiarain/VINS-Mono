@@ -87,8 +87,11 @@ class IntegrationBase
                             Eigen::Vector3d &result_linearized_ba, Eigen::Vector3d &result_linearized_bg, bool update_jacobian)
     {
         //ROS_INFO("midpoint integration");
+        // 中值数值积分，在中值积分中采用的数据都是两个时刻的，_gyr_0，_gyr_1；_acc_0，_acc_1；
         Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);
         Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
+
+        // 由上一个时刻delta_q和陀螺仪的测量值得到下一个时刻的delta_q
         result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);
         Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);
         Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
@@ -116,6 +119,7 @@ class IntegrationBase
                 -a_1_x(1), a_1_x(0), 0;
 
             // Technical Report 公式（9）
+            // TODO 代码中的公式和论文中的公式对不上
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 
@@ -123,13 +127,16 @@ class IntegrationBase
             F.block<3, 3>(0, 6) = MatrixXd::Identity(3,3) * _dt;
             F.block<3, 3>(0, 9) = -0.25 * (delta_q.toRotationMatrix() + result_delta_q.toRotationMatrix()) * _dt * _dt;
             F.block<3, 3>(0, 12) = -0.25 * result_delta_q.toRotationMatrix() * R_a_1_x * _dt * _dt * -_dt;
+
             F.block<3, 3>(3, 3) = Matrix3d::Identity() - R_w_x * _dt;
             F.block<3, 3>(3, 12) = -1.0 * MatrixXd::Identity(3,3) * _dt;
-            F.block<3, 3>(6, 3) = -0.5 * delta_q.toRotationMatrix() * R_a_0_x * _dt + 
+
+            F.block<3, 3>(6, 3) = -0.5 * delta_q.toRotationMatrix() * R_a_0_x * _dt +
                                   -0.5 * result_delta_q.toRotationMatrix() * R_a_1_x * (Matrix3d::Identity() - R_w_x * _dt) * _dt;
             F.block<3, 3>(6, 6) = Matrix3d::Identity();
             F.block<3, 3>(6, 9) = -0.5 * (delta_q.toRotationMatrix() + result_delta_q.toRotationMatrix()) * _dt;
             F.block<3, 3>(6, 12) = -0.5 * result_delta_q.toRotationMatrix() * R_a_1_x * _dt * -_dt;
+
             F.block<3, 3>(9, 9) = Matrix3d::Identity();
             F.block<3, 3>(12, 12) = Matrix3d::Identity();
             //cout<<"A"<<endl<<A<<endl;
@@ -151,6 +158,7 @@ class IntegrationBase
             //step_jacobian = F;
             //step_V = V;
             // Technical Report 公式（11） 更新雅克比矩阵
+            // 初始化时, jacobian == Eigen::Matrix<double, 15, 15>::Identity()
             jacobian = F * jacobian;
             covariance = F * covariance * F.transpose() + V * noise * V.transpose();
         }

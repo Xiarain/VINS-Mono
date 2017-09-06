@@ -21,8 +21,8 @@ class ImageFrame
         double t;
         Matrix3d R;
         Vector3d T;
-        IntegrationBase *pre_integration;
-        bool is_key_frame;
+        IntegrationBase *pre_integration; // IMU预积分
+        bool is_key_frame; // 是否是关键帧
 };
 
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x);

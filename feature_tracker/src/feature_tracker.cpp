@@ -242,7 +242,7 @@ void FeatureTracker::rejectWithF()
         {
             Eigen::Vector3d tmp_p;
             // tmp_p 输出3D点
-            // TODO 把检测到特征点加入相机畸变模型转换到像素坐标系上？？？
+            // TODO 把检测到特征点加入相机畸变矫正模型转换到像素坐标系上？？？
             // 将一个点从图像坐标系转换到像素坐标系将图像坐标系
             m_camera->liftProjective(Eigen::Vector2d(prev_pts[i].x, prev_pts[i].y), tmp_p);
 
