@@ -194,11 +194,20 @@ KeyFrame* KeyFrameDatabase::getLastKeyframe(int last_index)
     return *rit;
 }
 
+/**
+ * @brief 4自由度的图优化
+ * @param cur_index 当前帧序列
+ * @param loop_correct_t
+ * @param loop_correct_r
+ */
 void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d &loop_correct_t, Eigen::Matrix3d &loop_correct_r)
 {
 	ROS_DEBUG("optimizae pose graph begin!");
 	unique_lock<mutex> lock(mOptimiazationPosegraph);
+
+	// 取得当前帧
 	KeyFrame* cur_kf = getKeyframe(cur_index);
+
 	int loop_index = cur_kf->loop_index;
 	if (earliest_loop_index > loop_index || earliest_loop_index == -1)
 		earliest_loop_index = loop_index;
@@ -213,6 +222,7 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 	ceres::Problem problem;
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+
 	//options.minimizer_progress_to_stdout = true;
 	options.max_solver_time_in_seconds = SOLVER_TIME * 3;
 	options.max_num_iterations = 5;
@@ -220,35 +230,45 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 	ceres::LossFunction *loss_function;
 	loss_function = new ceres::HuberLoss(1.0);
 	//loss_function = new ceres::CauchyLoss(1.0);
+
+	// 局部参数化，为了限制求解的范围在[-pi, pi]
 	ceres::LocalParameterization* angle_local_parameterization =
 	    AngleLocalParameterization::Create();
 
 	list<KeyFrame*>::iterator it;
 
 	int i = 0;
+
+	// 遍历所有的关键帧
 	for (it = keyFrameList.begin(); it != keyFrameList.end(); it++)
 	{
+		// 找到已经闭环后的关键帧
 		if ((*it)->global_index < earliest_loop_index)
 			continue;
 		(*it)->resample_index = i;
+
 		Quaterniond tmp_q;
 		Matrix3d tmp_r;
 		Vector3d tmp_t;
 		(*it)->getOriginPose(tmp_t, tmp_r);
 		tmp_q = tmp_r;
+
 		t_array[i][0] = tmp_t(0);
 		t_array[i][1] = tmp_t(1);
 		t_array[i][2] = tmp_t(2);
 		q_array[i] = tmp_q;
 
+		// 四元数转换为欧拉角
 		Vector3d euler_angle = Utility::R2ypr(tmp_q.toRotationMatrix());
 		euler_array[i][0] = euler_angle.x();
 		euler_array[i][1] = euler_angle.y();
 		euler_array[i][2] = euler_angle.z();
 
+		// 添加参数块，欧拉角和位移量
 		problem.AddParameterBlock(euler_array[i], 1, angle_local_parameterization);
 		problem.AddParameterBlock(t_array[i], 3);
 
+		// 最早形成闭环的关键帧数据保持不变
 		if ((*it)->global_index == earliest_loop_index)
 		{	
 			problem.SetParameterBlockConstant(euler_array[i]);
@@ -256,16 +276,27 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 		}
 
 		//add edge
+		// 添加残差
+		// 遍历该帧相邻的五个关键帧
 		for (int j = 1; j < 5; j++)
 		{
 		  if (i - j > 0)
 		  {
 		    Vector3d euler_conncected = Utility::R2ypr(q_array[i-j].toRotationMatrix());
+
 		    Vector3d relative_t(t_array[i][0] - t_array[i-j][0], t_array[i][1] - t_array[i-j][1], t_array[i][2] - t_array[i-j][2]);
 		    relative_t = q_array[i-j].inverse() * relative_t;
-		    double relative_yaw = euler_array[i][0] - euler_array[i-j][0];
-		    ceres::CostFunction* cost_function = FourDOFError::Create( relative_t.x(), relative_t.y(), relative_t.z(),
+
+			// 第i-j帧到i帧的yaw轴变化值
+			// euler_conncected.y() euler_conncected.z()分别是第i-j帧的pitch，roll轴
+			double relative_yaw = euler_array[i][0] - euler_array[i-j][0];
+
+			// FourDOFError::Create：新建立一个FourDOFError结构体
+			// relative_yaw:通过里程计得到的原始数据
+			ceres::CostFunction* cost_function = FourDOFError::Create( relative_t.x(), relative_t.y(), relative_t.z(),
 		                                   relative_yaw, euler_conncected.y(), euler_conncected.z());
+			// euler_array[i-j]：原始里程计得到位姿
+			// 这里没用核函数的原因是，连续帧之间进行优化是不会存在外点
 		    problem.AddResidualBlock(cost_function, NULL, euler_array[i-j], 
 		                            t_array[i-j], 
 		                            euler_array[i], 
@@ -277,13 +308,20 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 		if((*it)->update_loop_info)
 		{
 			int connected_index = getKeyframe((*it)->loop_index)->resample_index;
+
 			assert((*it)->loop_index >= earliest_loop_index);
+
 			Vector3d euler_conncected = Utility::R2ypr(q_array[connected_index].toRotationMatrix());
+
 			Vector3d relative_t;
+			// 得到由闭环检测得到的相对旋转、位移量
 			relative_t = (*it)->getLoopRelativeT();
 			double relative_yaw = (*it)->getLoopRelativeYaw();
+
+			// 比重为5，相对于FourDOFError
 			ceres::CostFunction* cost_function = FourDOFWeightError::Create( relative_t.x(), relative_t.y(), relative_t.z(),
 																	   relative_yaw, euler_conncected.y(), euler_conncected.z());
+			// 使用核函数，是因为闭环检测可能存在无匹配，存在外点
 			problem.AddResidualBlock(cost_function, loss_function, euler_array[connected_index], 
 														  t_array[connected_index], 
 														  euler_array[i], 
@@ -299,11 +337,14 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 	//std::cout << summary.BriefReport() << "\n";
 
 	i = 0;
+
+	// 遍历所有关键帧，将优化的结果用于更新所有关键帧位置
 	for (it = keyFrameList.begin(); it != keyFrameList.end(); it++)
 	{
 		if ((*it)->global_index < earliest_loop_index)
 			continue;
 		Quaterniond tmp_q;
+
 		tmp_q = Utility::ypr2R(Vector3d(euler_array[i][0], euler_array[i][1], euler_array[i][2]));
 		Vector3d tmp_t = Vector3d(t_array[i][0], t_array[i][1], t_array[i][2]);
 		Matrix3d tmp_r = tmp_q.toRotationMatrix();
@@ -314,6 +355,7 @@ void KeyFrameDatabase::optimize4DoFLoopPoseGraph(int cur_index, Eigen::Vector3d 
 		i++;
 	}
 
+	// 遍历所有关键帧，利用当前优化和优化前的Yaw轴的值，进行所有关键帧的Yaw矫正
 	Vector3d cur_t, origin_t;
 	Matrix3d cur_r, origin_r;
 	cur_kf->getPose(cur_t, cur_r);

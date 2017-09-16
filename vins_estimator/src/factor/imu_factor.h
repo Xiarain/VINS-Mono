@@ -25,8 +25,8 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
         Eigen::Quaterniond Qi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
 
         Eigen::Vector3d Vi(parameters[1][0], parameters[1][1], parameters[1][2]);
-        Eigen::Vector3d Bai(parameters[1][3], parameters[1][4], parameters[1][5]);
-        Eigen::Vector3d Bgi(parameters[1][6], parameters[1][7], parameters[1][8]);
+        Eigen::Vector3d Bai(parameters[1][3], parameters[1][4], parameters[1][5]); // 陀螺仪零偏
+        Eigen::Vector3d Bgi(parameters[1][6], parameters[1][7], parameters[1][8]); // 加速度计零偏
 
         Eigen::Vector3d Pj(parameters[2][0], parameters[2][1], parameters[2][2]);
         Eigen::Quaterniond Qj(parameters[2][6], parameters[2][3], parameters[2][4], parameters[2][5]);
@@ -63,20 +63,22 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
         residual = pre_integration->evaluate(Pi, Qi, Vi, Bai, Bgi,
                                             Pj, Qj, Vj, Baj, Bgj);
 
+        // P = F*P*F^T + V*n*V^T
         Eigen::Matrix<double, 15, 15> sqrt_info = Eigen::LLT<Eigen::Matrix<double, 15, 15>>(pre_integration->covariance.inverse()).matrixL().transpose();
         //sqrt_info.setIdentity();
-        // 协方差矩阵作为优化相机、IMU和先验之间的比例系数
+        // 协方差矩阵作为优化相机、IMU和先验之间的比例系数，这个点非常重要
         residual = sqrt_info * residual;
 
         if (jacobians)
         {
+            // Technical Report VINS-Mono 公式（12）
             double sum_dt = pre_integration->sum_dt;
-            Eigen::Matrix3d dp_dba = pre_integration->jacobian.template block<3, 3>(O_P, O_BA);
-            Eigen::Matrix3d dp_dbg = pre_integration->jacobian.template block<3, 3>(O_P, O_BG);
+            Eigen::Matrix3d dp_dba = pre_integration->jacobian.template block<3, 3>(O_P, O_BA); // O_P 0 O_BA 9
+            Eigen::Matrix3d dp_dbg = pre_integration->jacobian.template block<3, 3>(O_P, O_BG); // O_BG 12
 
-            Eigen::Matrix3d dq_dbg = pre_integration->jacobian.template block<3, 3>(O_R, O_BG);
+            Eigen::Matrix3d dq_dbg = pre_integration->jacobian.template block<3, 3>(O_R, O_BG); // O_R 3
 
-            Eigen::Matrix3d dv_dba = pre_integration->jacobian.template block<3, 3>(O_V, O_BA);
+            Eigen::Matrix3d dv_dba = pre_integration->jacobian.template block<3, 3>(O_V, O_BA); // O_V 6
             Eigen::Matrix3d dv_dbg = pre_integration->jacobian.template block<3, 3>(O_V, O_BG);
 
             if (pre_integration->jacobian.maxCoeff() > 1e8 || pre_integration->jacobian.minCoeff() < -1e8)

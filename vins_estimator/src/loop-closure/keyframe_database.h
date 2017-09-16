@@ -253,11 +253,16 @@ void RotationMatrixRotatePoint(const T R[9], const T t[3], T r_t[3])
 	r_t[2] = R[6] * t[0] + R[7] * t[1] + R[8] * t[2];
 };
 
+/**
+ * @brief 构造一个4自由度的ceres残差
+ */
 struct FourDOFError
 {
+	// relative_yaw:通过里程计得到的原始数据
 	FourDOFError(double t_x, double t_y, double t_z, double relative_yaw, double pitch_i, double roll_i)
 				  :t_x(t_x), t_y(t_y), t_z(t_z), relative_yaw(relative_yaw), pitch_i(pitch_i), roll_i(roll_i){}
 
+	// yaw_i,yaw_j闭环检测得到的位姿（传递过来的是欧拉角，所以yaw_i[0]为yaw轴）
 	template <typename T>
 	bool operator()(const T* const yaw_i, const T* ti, const T* yaw_j, const T* tj, T* residuals) const
 	{
@@ -266,21 +271,34 @@ struct FourDOFError
 		t_w_ij[1] = tj[1] - ti[1];
 		t_w_ij[2] = tj[2] - ti[2];
 
+		// Technicla Report VINS-Mono 公式（27）
 		// euler to rotation
+		// 欧拉角转换为旋转矩阵
 		T w_R_i[9];
 		YawPitchRollToRotationMatrix(yaw_i[0], T(pitch_i), T(roll_i), w_R_i);
 		// rotation transpose
 		T i_R_w[9];
+
+		// 旋转矩阵求逆，就是对旋转矩阵求转置
 		RotationMatrixTranspose(w_R_i, i_R_w);
 		// rotation matrix rotate point
 		T t_i_ij[3];
+
+		// Rt，将world坐标系的点转换到imu坐标系下的点
 		RotationMatrixRotatePoint(i_R_w, t_w_ij, t_i_ij);
 
 		residuals[0] = (t_i_ij[0] - T(t_x));
 		residuals[1] = (t_i_ij[1] - T(t_y));
 		residuals[2] = (t_i_ij[2] - T(t_z));
+
+		// 一开始这里值为零，但是经过优化后yaw_j[0]，和yaw_i[0]发生了变化，这个值就不会为零了
+		//  yaw_i:euler_array[i-j],
+		//  yaw_j:euler_array[i],
+		// relative_yaw = euler_array[i][0] - euler_array[i-j][0];
+		// yaw_j[0]：闭环检测得到的位姿中第j帧关键帧的yaw轴；yaw_i[0]：闭环检测得到的位姿中第i帧关键帧的yaw轴；relative_yaw：原始里程计得到的相对位姿中的yaw轴；
 		residuals[3] = NormalizeAngle(yaw_j[0] - yaw_i[0] - T(relative_yaw)) / T(10.0);
 
+		while(1);
 		return true;
 	}
 
@@ -297,6 +315,9 @@ struct FourDOFError
 
 };
 
+/**
+ * @brief 与FourDOFError相比多了一个比重
+ */
 struct FourDOFWeightError
 {
 	FourDOFWeightError(double t_x, double t_y, double t_z, double relative_yaw, double pitch_i, double roll_i)

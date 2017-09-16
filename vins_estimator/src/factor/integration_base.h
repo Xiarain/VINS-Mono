@@ -237,9 +237,9 @@ class IntegrationBase
     Eigen::Matrix<double, 18, 18> noise;
 
     double sum_dt;
-    Eigen::Vector3d delta_p;
-    Eigen::Quaterniond delta_q;
-    Eigen::Vector3d delta_v;
+    Eigen::Vector3d delta_p; // \delta \alpha
+    Eigen::Quaterniond delta_q; // \delta \beta
+    Eigen::Vector3d delta_v; // \delta \gamma
 
     std::vector<double> dt_buf;
     std::vector<Eigen::Vector3d> acc_buf;

@@ -504,10 +504,13 @@ void process_pose_graph()
             relocalize_r = correct_r;
             relocalize_t = correct_t;
             m_loop_drift.unlock();
+
+
             m_update_visualization.lock();
             keyframe_database.updateVisualization();
             CameraPoseVisualization* posegraph_visualization = keyframe_database.getPosegraphVisualization();
             m_update_visualization.unlock();
+
             pubOdometry(estimator, cur_header, relocalize_t, relocalize_r);
             pubPoseGraph(posegraph_visualization, cur_header); 
             nav_msgs::Path refine_path = keyframe_database.getPath();

@@ -311,7 +311,7 @@ void KeyFrame::PnPRANSAC(vector<cv::Point2f> &measurements_old,
     // opencv 版本选择
     // D：畸变系数
     // useExtrinsicGuess当为ture时，这个函数会将rvec和tvec作为旋转和位移初始近似值
-    if (C   V_MAJOR_VERSION < 3)
+    if (CV_MAJOR_VERSION < 3)
         solvePnPRansac(pts_3_vector, measurements_old_norm, K, D, rvec, t, true, 100, 10.0 / 460.0, 100, inliers);
     else
     {

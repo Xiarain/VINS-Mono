@@ -655,7 +655,7 @@ void Estimator::vector2double()
 }
 
 /**
- * @brief 数据类型转换
+ * @brief 系统数据类型转换，通过闭环检测得到最新一个关键帧之前跟踪得到的位姿与闭环检测得到的位姿得到矫正量
  *
  */
 void Estimator::double2vector()
@@ -664,6 +664,7 @@ void Estimator::double2vector()
     Vector3d origin_R0 = Utility::R2ypr(Rs[0]);
     Vector3d origin_P0 = Ps[0];
 
+    // last_R0，last_P0：滑动窗口的第一帧的位姿
     if (failure_occur)
     {
         origin_R0 = Utility::R2ypr(last_R0);
@@ -671,15 +672,17 @@ void Estimator::double2vector()
         failure_occur = 0;
     }
 
+    // para_Pose[0]是在Estimator::vector2double()函数中储存了滑动窗口中的机体在世界坐标系中的位姿
     Vector3d origin_R00 = Utility::R2ypr(Quaterniond(para_Pose[0][6],
                                                       para_Pose[0][3],
                                                       para_Pose[0][4],
                                                       para_Pose[0][5]).toRotationMatrix());
-    // yaw轴
+    // 通过全局优化得到的yaw轴修正量，如果没有使用闭环检测的话，则仅仅是优化得到的
     double y_diff = origin_R0.x() - origin_R00.x();
     //TODO
     Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0));
 
+    // 进行滑动窗口的机体位姿的Yaw轴方向修正
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
 
@@ -712,14 +715,18 @@ void Estimator::double2vector()
     }
 
     VectorXd dep = f_manager.getDepthVector();
+
+    // 取特征点的深度信息
     for (int i = 0; i < f_manager.getFeatureCount(); i++)
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
 
+    // 是否进行闭环以及是否发生了闭环，利用最新一次的关键帧闭环得到矫正信息
     if (LOOP_CLOSURE && relocalize && retrive_data_vector[0].relative_pose && !retrive_data_vector[0].relocalized)
     {
         for (int i = 0; i < (int)retrive_data_vector.size();i++)
             retrive_data_vector[i].relocalized = true;
+
         Matrix3d vio_loop_r;
         Vector3d vio_loop_t;
         vio_loop_r = rot_diff * Quaterniond(retrive_data_vector[0].loop_pose[6], retrive_data_vector[0].loop_pose[3], retrive_data_vector[0].loop_pose[4], retrive_data_vector[0].loop_pose[5]).normalized().toRotationMatrix();
@@ -728,6 +735,8 @@ void Estimator::double2vector()
                                 retrive_data_vector[0].loop_pose[2] - para_Pose[0][2]) + origin_P0;
         Quaterniond vio_loop_q(vio_loop_r);
         double relocalize_yaw;
+
+        // 由最近一次闭环得到的矫正信息
         relocalize_yaw = Utility::R2ypr(retrive_data_vector[0].R_old).x() - Utility::R2ypr(vio_loop_r).x();
         relocalize_r = Utility::ypr2R(Vector3d(relocalize_yaw, 0, 0));
         relocalize_t = retrive_data_vector[0].P_old- relocalize_r * vio_loop_t;
@@ -795,7 +804,7 @@ void Estimator::optimization()
     //loss_function = new ceres::HuberLoss(1.0);
     loss_function = new ceres::CauchyLoss(1.0);
 
-    // 1.添加参数块
+    // 添加参数块
     // Technical Report VINS-Mono 公式(20) 中x0 ...... xn,其中x为机体坐标系的位置，速度，旋转，IMU的陀螺仪零偏，加速度零偏
     // IMU和camera外参
     for (int i = 0; i < WINDOW_SIZE + 1; i++)
@@ -833,7 +842,7 @@ void Estimator::optimization()
     // 数据类型转换
     vector2double();
 
-    // 2.添加系统残差
+    // 添加系统残差
     // 添加先验残差
     if (last_marginalization_info)
     {
@@ -961,7 +970,7 @@ void Estimator::optimization()
                                 // para_Pose[start]：相机位置, retrive_data_vector[k].loop_pose：形成闭环帧两帧之间的相对位置关系,
                                 // para_Ex_Pose[0]：IMU与camera的外参, para_Feature[feature_index]：每个特征点的深度；
                                 problem.AddResidualBlock(f, loss_function, para_Pose[start], retrive_data_vector[k].loop_pose, para_Ex_Pose[0], para_Feature[feature_index]);
-                              //problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
+                                //problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
                                 retrive_feature_index++;
                             }     
                         }
@@ -988,6 +997,7 @@ void Estimator::optimization()
         options.max_solver_time_in_seconds = SOLVER_TIME * 4.0 / 5.0;
     else
         options.max_solver_time_in_seconds = SOLVER_TIME;
+
     TicToc t_solver;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
@@ -996,8 +1006,10 @@ void Estimator::optimization()
     ROS_DEBUG("solver costs: %f", t_solver.toc());
 
     // relative info between two loop frame
+    // 计算滑动窗口中与每一个闭环关键帧的相对位姿
     if(LOOP_CLOSURE && relocalize)
-    { 
+    {
+        // 遍历所有的闭环关键帧
         for (int k = 0; k < (int)retrive_data_vector.size(); k++)
         {
             for(int i = 0; i< WINDOW_SIZE; i++)
@@ -1005,14 +1017,20 @@ void Estimator::optimization()
                 if(retrive_data_vector[k].header == Headers[i].stamp.toSec())
                 {
                     retrive_data_vector[k].relative_pose = true;
+
+                    // 滑动窗口中的每一帧的位姿
                     Matrix3d Rs_i = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
                     Vector3d Ps_i = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
+
                     Quaterniond Qs_loop;
+
                     Qs_loop = Quaterniond(retrive_data_vector[k].loop_pose[6],  retrive_data_vector[k].loop_pose[3],  retrive_data_vector[k].loop_pose[4],  retrive_data_vector[k].loop_pose[5]).normalized().toRotationMatrix();
+
+                    // 闭环关键帧的位姿
                     Matrix3d Rs_loop = Qs_loop.toRotationMatrix();
                     Vector3d Ps_loop = Vector3d( retrive_data_vector[k].loop_pose[0],  retrive_data_vector[k].loop_pose[1],  retrive_data_vector[k].loop_pose[2]);
 
-                    // 修正检测到闭环两帧之间的关键帧
+                    // 修正检测到闭环两帧之间的相对位姿
                     retrive_data_vector[k].relative_t = Rs_loop.transpose() * (Ps_i - Ps_loop);
                     retrive_data_vector[k].relative_q = Rs_loop.transpose() * Rs_i;
                     retrive_data_vector[k].relative_yaw = Utility::normalizeAngle(Utility::R2ypr(Rs_i).x() - Utility::R2ypr(Rs_loop).x());
@@ -1024,6 +1042,7 @@ void Estimator::optimization()
         } 
     }
 
+    // 系统数据类型转换，通过闭环检测得到最新一个关键帧的之前跟踪得到的位姿与闭环检测得到的位姿做差得到矫正量
     double2vector();
 
     TicToc t_whole_marginalization;
@@ -1035,27 +1054,40 @@ void Estimator::optimization()
     if (marginalization_flag == MARGIN_OLD)
     {
         MarginalizationInfo *marginalization_info = new MarginalizationInfo();
+
+        // 数据类型转换
         vector2double();
 
+        // last_marginalization_info为MarginalizationInfo
         if (last_marginalization_info)
         {
             vector<int> drop_set;
+
+            // 已经被边缘化掉的关键帧
             for (int i = 0; i < static_cast<int>(last_marginalization_parameter_blocks.size()); i++)
             {
+                // para_Pose[0]:滑动窗口中时间最长的关键帧
                 if (last_marginalization_parameter_blocks[i] == para_Pose[0] ||
                     last_marginalization_parameter_blocks[i] == para_SpeedBias[0])
                     drop_set.push_back(i);
             }
             // construct new marginlization_factor
+            // MarginalizationFactor类继承了ceres::CostFunction
+            // !所有带factor的类都继承了ceres::CostFunction
             MarginalizationFactor *marginalization_factor = new MarginalizationFactor(last_marginalization_info);
             ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(marginalization_factor, NULL,
                                                                            last_marginalization_parameter_blocks,
                                                                            drop_set);
 
             marginalization_info->addResidualBlockInfo(residual_block_info);
+            //  marginalization_info->addResidualBlockInfo(residual_block_info)
+            //      residual_block_info（marginalization_factor）
+            //          marginalization_factor（last_marginalization_info）
         }
 
+        // 添加IMU测量值，IMU误差模型
         {
+            // 如果这个IMU预积分时间小于阀值
             if (pre_integrations[1]->sum_dt < 10.0)
             {
                 IMUFactor* imu_factor = new IMUFactor(pre_integrations[1]);
@@ -1066,11 +1098,17 @@ void Estimator::optimization()
             }
         }
 
+        // camera测量残差
         {
             int feature_index = -1;
+
+            // 特征点
+            // 遍历每个特征点的被观测到的图像特征点，imu_i这个3D特征点第一次在i帧中被观测到，imu_j这个特征点在后续j帧继续被观测到
+            // 3D特征点在i帧中的图像特征点位置pts_i,在j帧中的图像特征点位置pts_j
             for (auto &it_per_id : f_manager.feature)
             {
                 it_per_id.used_num = it_per_id.feature_per_frame.size();
+
                 if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
                     continue;
 
@@ -1106,6 +1144,7 @@ void Estimator::optimization()
         marginalization_info->marginalize();
         ROS_DEBUG("marginalization %f ms", t_margin.toc());
 
+        // 滑动窗口中参数块存储地址调整
         std::unordered_map<long, double *> addr_shift;
         for (int i = 1; i <= WINDOW_SIZE; i++)
         {
@@ -1124,20 +1163,25 @@ void Estimator::optimization()
         last_marginalization_parameter_blocks = parameter_blocks;
         
     }
-    else // 如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉而保留IMU测量值在滑动窗口中
+    else // 如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉（边缘化）而保留IMU测量值在滑动窗口中
     {
         if (last_marginalization_info &&
             std::count(std::begin(last_marginalization_parameter_blocks), std::end(last_marginalization_parameter_blocks), para_Pose[WINDOW_SIZE - 1]))
         {
 
             MarginalizationInfo *marginalization_info = new MarginalizationInfo();
+
+            // 数据转换
             vector2double();
+
             if (last_marginalization_info)
             {
                 vector<int> drop_set;
                 for (int i = 0; i < static_cast<int>(last_marginalization_parameter_blocks.size()); i++)
                 {
+                    // para_SpeedBias[WINDOW_SIZE - 1] 最新的关键帧
                     ROS_ASSERT(last_marginalization_parameter_blocks[i] != para_SpeedBias[WINDOW_SIZE - 1]);
+
                     if (last_marginalization_parameter_blocks[i] == para_Pose[WINDOW_SIZE - 1])
                         drop_set.push_back(i);
                 }
@@ -1152,6 +1196,8 @@ void Estimator::optimization()
 
             TicToc t_pre_margin;
             ROS_DEBUG("begin marginalization");
+
+            // 开始边缘化
             marginalization_info->preMarginalize();
             ROS_DEBUG("end pre marginalization, %f ms", t_pre_margin.toc());
 
@@ -1167,7 +1213,7 @@ void Estimator::optimization()
                     continue;
                 else if (i == WINDOW_SIZE)
                 {
-                    // reinterpret_cast：强制类型转换符
+                    // reinterpret_cast：强制类型转换符，从指针类型到一个足够大的整数类型
                     addr_shift[reinterpret_cast<long>(para_Pose[i])] = para_Pose[i - 1];
                     addr_shift[reinterpret_cast<long>(para_SpeedBias[i])] = para_SpeedBias[i - 1];
                 }
@@ -1180,6 +1226,7 @@ void Estimator::optimization()
             for (int i = 0; i < NUM_OF_CAM; i++)
                 addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
 
+            // 参数块
             vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
             if (last_marginalization_info)
                 delete last_marginalization_info;
@@ -1194,14 +1241,16 @@ void Estimator::optimization()
 }
 
 /**
- * @brief 滑动窗口
+ * @brief 滑动窗口，维持滑动窗口的大小，保证SLAM运行计算的复杂度
+ *        如果第二最新帧是关键帧的话，那么这个关键帧就会留在滑动窗口中，时间最长的一帧和其测量值就会被边缘化掉
+ *        如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉而保留IMU测量值在滑动窗口中,这样的策略会保证系统的稀疏性
  */
 void Estimator::slideWindow()
 {
     TicToc t_margin;
     if (marginalization_flag == MARGIN_OLD)
     {
-        // 将第一个
+        // Rs[0] 滑动窗口中存在时间最长的关键帧
         back_R0 = Rs[0];
         back_P0 = Ps[0];
 
