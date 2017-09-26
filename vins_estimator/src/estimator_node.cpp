@@ -133,6 +133,7 @@ getMeasurements()
         if (imu_buf.empty() || feature_buf.empty())
             return measurements;
 
+        // IMU数据队列中的最后一个数据的时间戳小于特征点队列中第一个数据的时间戳，等待IMU数据
         if (!(imu_buf.back()->header.stamp > feature_buf.front()->header.stamp))
         {
             ROS_WARN("wait for imu, only should happen at the beginning");
@@ -140,6 +141,7 @@ getMeasurements()
             return measurements;
         }
 
+        //  IMU数据队列中的第一个数据的时间戳大于特征点队列中第一个数据的时间戳，那么就舍弃一个特征点队列中的数据
         if (!(imu_buf.front()->header.stamp < feature_buf.front()->header.stamp))
         {
             ROS_WARN("throw img, only should happen at the beginning");
@@ -150,6 +152,8 @@ getMeasurements()
         feature_buf.pop();
 
         std::vector<sensor_msgs::ImuConstPtr> IMUs;
+
+        // 取出所有的时间戳小于当前特征点队列的IMU数据
         while (imu_buf.front()->header.stamp <= img_msg->header.stamp)
         {
             IMUs.emplace_back(imu_buf.front());

@@ -520,6 +520,7 @@ CostFunctionFactory::instance(void)
     return m_instance;
 }
 
+// 根据上次函数中的形参，调用的就是这个generateCostFunction函数
 ceres::CostFunction*
 CostFunctionFactory::generateCostFunction(const CameraConstPtr& camera,
         const Eigen::Vector3d& observed_P,
@@ -541,10 +542,10 @@ CostFunctionFactory::generateCostFunction(const CameraConstPtr& camera,
                 new ceres::AutoDiffCostFunction<ReprojectionError1<EquidistantCamera>, 2, 8, 4, 3>(
                 new ReprojectionError1<EquidistantCamera>(observed_P, observed_p));
             break;
-        case Camera::PINHOLE:
+        case Camera::PINHOLE: // 针孔相机函数
             costFunction =
                 new ceres::AutoDiffCostFunction<ReprojectionError1<PinholeCamera>, 2, 8, 4, 3>(
-                new ReprojectionError1<PinholeCamera>(observed_P, observed_p));
+                new ReprojectionError1<PinholeCamera>(observed_P, observed_p)); // observed_P 3D点； observed_p 2D点
             break;
         case Camera::MEI:
             costFunction =

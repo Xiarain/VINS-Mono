@@ -480,6 +480,12 @@ CameraCalibration::calibrateHelper(CameraPtr& camera,
     return true;
 }
 
+/**
+ * @brief 优化
+ * @param camera 相机指针
+ * @param rvecs PnP求解出来的旋转结果
+ * @param tvecs PnP求解出来的平移结果
+ */
 void
 CameraCalibration::optimize(CameraPtr& camera,
                             std::vector<cv::Mat>& rvecs, std::vector<cv::Mat>& tvecs) const

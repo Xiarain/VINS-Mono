@@ -9,6 +9,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 #include "camodocal/gpl/gpl.h"
+#include <iostream>
 
 namespace camodocal
 {
@@ -466,7 +467,7 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
     //double lambda;
 
     // Lift points to normalised plane
-    // 将点转换为标准平面
+    // 将图像平面上的点转换为标准平面
     // 逆向变换
     mx_d = m_inv_K11 * p(0) + m_inv_K13; // 1/fx * x - u0/fx
     my_d = m_inv_K22 * p(1) + m_inv_K23; // 1/fy * y - v0/fy
@@ -507,6 +508,9 @@ PinholeCamera::liftProjective(const Eigen::Vector2d& p, Eigen::Vector3d& P) cons
             // TODO 递归畸变模型
             int n = 8;
             Eigen::Vector2d d_u;
+
+            // 进行畸变模型进行矫正
+            // p_u 是没有矫正过的归一化坐标系上的点，d_u是矫正模型的矫正量，p_d是经过矫正模型的的去畸变的点
             distortion(Eigen::Vector2d(mx_d, my_d), d_u);
             // Approximate value
             mx_u = mx_d - d_u(0); // mx_u my_u 是较小的数
@@ -551,6 +555,7 @@ PinholeCamera::spaceToPlane(const Eigen::Vector3d& P, Eigen::Vector2d& p) const
         Eigen::Vector2d d_u;
 
         // 利用畸变模型对输入的点进行矫正
+        // p_u 是没有矫正过的归一化坐标系上的点，d_u是矫正模型的矫正量，p_d是经过矫正模型的的去畸变的点
         distortion(p_u, d_u);
         p_d = p_u + d_u;
     }

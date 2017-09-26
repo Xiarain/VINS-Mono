@@ -243,7 +243,6 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     {
                         // WINDOW_SIZE 20
                         double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
-
                         // 填充颜色：cv::Scalar(255 * (1 - len), 0, 255 * len) 蓝色 绿色 红色，
                         // 这里显示的颜色表明特征点被追踪次数，越红表明追踪到的次数越多
                         cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
