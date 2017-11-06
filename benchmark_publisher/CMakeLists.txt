@@ -4,12 +4,13 @@ project(benchmark_publisher)
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11 -DEIGEN_DONT_PARALLELIZE")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -rdynamic")
-
+set(Eigen3_DIR "/home/rain/workspace/Library/eigen3/share")
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp
     tf
     )
+
 
 catkin_package()
 include_directories(${catkin_INCLUDE_DIRS}) 

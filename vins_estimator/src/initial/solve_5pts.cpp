@@ -259,6 +259,7 @@ bool MotionEstimator::solveRelativeRT(const vector<pair<Vector3d, Vector3d>> &co
         int inlier_cnt = cv::recoverPose(E, ll, rr, cameraMatrix, rot, trans, mask);
         //cout << "inlier_cnt " << inlier_cnt << endl;
 
+        // 将Opencv类型数据转换为Eigen类型数据
         Eigen::Matrix3d R;
         Eigen::Vector3d T;
         for (int i = 0; i < 3; i++)

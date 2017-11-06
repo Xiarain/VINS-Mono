@@ -130,7 +130,7 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
 
 /**
  * @brief  处理一帧图像中的特征点
- * @param image 当前帧所有的齐次坐标系下的2D特征点
+ * @param image 当前帧所有的齐次坐标系下的2D特征点(id号，相机号，特征点位置)
  * @param header ROS消息帧头
  */
 void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image, const std_msgs::Header &header)
@@ -159,6 +159,8 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
     all_image_frame.insert(make_pair(header.stamp.toSec(), imageframe));
     tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
 
+    // 计算IMU与相机旋转的内参，
+    // ESTIMATE_EXTRINSIC 2：没有外部先验矫正，纯粹靠系统内部校准
     if(ESTIMATE_EXTRINSIC == 2)
     {
         ROS_INFO("calibrating extrinsic param, rotation movement is needed");
@@ -182,6 +184,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
         }
     }
 
+    // 系统是否进行初始化
     if (solver_flag == INITIAL)
     {
         if (frame_count == WINDOW_SIZE)
@@ -214,7 +217,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
                 
             }
             else
-                slideWindow();
+                slideWindow(); // slideWindow和frame_count 是同步的，
         }
         else
             frame_count++;
@@ -298,15 +301,19 @@ bool Estimator::initialStructure()
     }
     // global sfm
     // 全局SFM
+    //  Q: Rqcw
     Quaterniond Q[frame_count + 1];
     Vector3d T[frame_count + 1];
     map<int, Vector3d> sfm_tracked_points;
     vector<SFMFeature> sfm_f;
 
     // 特征点
+    // 将每一个3D特征点和相应的2D特征点封装到SFMFeature这个数据结构中
     for (auto &it_per_id : f_manager.feature)
     {
         int imu_j = it_per_id.start_frame - 1;
+
+        // 一个SFMFeature是由一个3D点特征，若干个2D点特征组成
         SFMFeature tmp_feature;
         tmp_feature.state = false;
         tmp_feature.id = it_per_id.feature_id;
@@ -333,9 +340,12 @@ bool Estimator::initialStructure()
         ROS_INFO("Not enough features or parallax; Move device around");
         return false;
     }
+
+
     GlobalSFM sfm;
 
     // SFM构造,初始化初始帧中的相机位置和特征点空间3D位置
+    // 输出Q: Rwc
     if(!sfm.construct(frame_count + 1, Q, T, l,
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
@@ -369,7 +379,8 @@ bool Estimator::initialStructure()
         {
             i++;
         }
-        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
+
+        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix(); // Q: Rwc T:twc
         Vector3d P_inital = - R_inital * T[i];
         cv::eigen2cv(R_inital, tmp_r);
 
@@ -411,6 +422,7 @@ bool Estimator::initialStructure()
         }
 
         // PnP求解
+        // reve t, Rcw, tcw
         if (! cv::solvePnP(pts_3_vector, pts_2_vector, K, D, rvec, t, 1))
         {
             ROS_DEBUG("solve pnp fail!");
@@ -422,11 +434,10 @@ bool Estimator::initialStructure()
 
         MatrixXd R_pnp,tmp_R_pnp;
         cv::cv2eigen(r, tmp_R_pnp);
-        R_pnp = tmp_R_pnp.transpose();
-
+        R_pnp = tmp_R_pnp.transpose(); // Rwc
         MatrixXd T_pnp;
         cv::cv2eigen(t, T_pnp);
-        T_pnp = R_pnp * (-T_pnp);
+        T_pnp = R_pnp * (-T_pnp); // twc
 
         frame_it->second.R = R_pnp * RIC[0].transpose();
         frame_it->second.T = T_pnp;
@@ -546,15 +557,16 @@ bool Estimator::visualInitialAlign()
 }
 
 /**
- * @brief 选择两足够多特征点和视差的帧，利用五点法恢复相对旋转和平移量
- * @param relative_R 恢复的旋转量
- * @param relative_T 恢复的平移量
- * @param l 选择的帧号
+ * @brief 在滑动窗口中选择两帧有足够多特征点和视差的帧，利用五点法恢复相对旋转和平移量
+ * @param relative_R 输出恢复的旋转量
+ * @param relative_T 输出恢复的平移量
+ * @param l 输出选择的帧号
  * @return
  */
 bool Estimator::relativePose(Matrix3d &relative_R, Vector3d &relative_T, int &l)
 {
     // find previous frame which contians enough correspondance and parallex with newest frame
+    // 在滑动窗口中选择
     for (int i = 0; i < WINDOW_SIZE; i++)
     {
         vector<pair<Vector3d, Vector3d>> corres;
@@ -1244,6 +1256,7 @@ void Estimator::optimization()
  * @brief 滑动窗口，维持滑动窗口的大小，保证SLAM运行计算的复杂度
  *        如果第二最新帧是关键帧的话，那么这个关键帧就会留在滑动窗口中，时间最长的一帧和其测量值就会被边缘化掉
  *        如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉而保留IMU测量值在滑动窗口中,这样的策略会保证系统的稀疏性
+ *        (0, 1, ..., N)关键帧，0是时间最长的关键帧，N是最新关键帧
  */
 void Estimator::slideWindow()
 {
@@ -1257,6 +1270,7 @@ void Estimator::slideWindow()
         // 把第窗口中的关键帧往前挪一个位置，也就是
         if (frame_count == WINDOW_SIZE)
         {
+            // 把滑动窗口中的0号关键帧以及IMU测量值移动到N号关键帧
             for (int i = 0; i < WINDOW_SIZE; i++)
             {
                 Rs[i].swap(Rs[i + 1]);
@@ -1273,6 +1287,8 @@ void Estimator::slideWindow()
                 Bas[i].swap(Bas[i + 1]);
                 Bgs[i].swap(Bgs[i + 1]);
             }
+
+            // 第N-1帧放到第N帧
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
@@ -1283,6 +1299,7 @@ void Estimator::slideWindow()
             delete pre_integrations[WINDOW_SIZE];
             pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE]};
 
+            // 清除时间最长的关键帧相应的IMU测量值
             dt_buf[WINDOW_SIZE].clear();
             linear_acceleration_buf[WINDOW_SIZE].clear();
             angular_velocity_buf[WINDOW_SIZE].clear();
@@ -1305,6 +1322,7 @@ void Estimator::slideWindow()
         {
             for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
             {
+                // 把这个IMU测量值单位时间，线加速度，角加速度都放到预积分的类中，也就是接受了这次IMU的测量值
                 double tmp_dt = dt_buf[frame_count][i];
                 Vector3d tmp_linear_acceleration = linear_acceleration_buf[frame_count][i];
                 Vector3d tmp_angular_velocity = angular_velocity_buf[frame_count][i];
@@ -1316,6 +1334,7 @@ void Estimator::slideWindow()
                 angular_velocity_buf[frame_count - 1].push_back(tmp_angular_velocity);
             }
 
+            // 第N-1帧放到第N帧
             Headers[frame_count - 1] = Headers[frame_count];
             Ps[frame_count - 1] = Ps[frame_count];
             Vs[frame_count - 1] = Vs[frame_count];

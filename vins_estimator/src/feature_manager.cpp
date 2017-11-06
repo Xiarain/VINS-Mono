@@ -31,7 +31,7 @@ int FeatureManager::getFeatureCount()
     for (auto &it : feature)
     {
 
-        // used_num 这个特征点在几个帧出现过
+        // used_num 这个特征点在图像帧中出现的次数
         it.used_num = it.feature_per_frame.size();
 
         if (it.used_num >= 2 && it.start_frame < WINDOW_SIZE - 2)
@@ -43,7 +43,8 @@ int FeatureManager::getFeatureCount()
 }
 
 /**
- * @brief 通过检测两帧之间的视差决定是否作为关键帧
+ * @brief 通过检测两帧之间的视差决定是否作为关键帧，同时添加之前检测到的特征点到feature（list<FeaturePerId>）这个容器中
+ *        计算每一个点跟踪的次数，以及它的视差
  * @param frame_count 当前帧的数量
  * @param image 当前帧所有的齐次坐标系下的2D特征点
  * @return 该帧是否为关键帧
@@ -61,7 +62,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     for (auto &id_pts : image)
     {
         // id_pts.second[0].second 这帧图像中的每一个特征点2D图像位置
-        // FeaturePerFrame 这一帧图像中的每一个特征点
+        // FeaturePerFrame 这个3D点这一帧对应的2D点
         FeaturePerFrame f_per_fra(id_pts.second[0].second);
 
         // 这一帧图像中的每一个特征点ID号
@@ -79,16 +80,17 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
             return it.feature_id == feature_id;
                           });
 
-        if (it == feature.end())// 到了全局特征点的最后一个，向全局3D特征点队列添加当前3D特征点的ID号和2D特征点位置
+        if (it == feature.end())// 到了全局特征点的最后一个（应该是在这个list容器中找不到，所以返回的是最后一个），这个特征点是一个全新的特征点，向全局3D特征点队列添加当前3D特征点的ID号和2D特征点位置
         {
             // FeaturePerId(int _feature_id:特征点ID号, int _start_frame出现的帧号)
             feature.push_back(FeaturePerId(feature_id, frame_count));
 
             // list back()返回最后一个元素，添加特征点
             // feature_per_frame:是FeaturePerFrame的容器，代表的是这一帧图像中的每一个特征点
+            // 将这一帧所有的2D特征点都添加到这个3D特征点下
             feature.back().feature_per_frame.push_back(f_per_fra);
         }
-        else if (it->feature_id == feature_id) // 之前全局特征点中与该帧图像匹配上的特征点个数统计
+        else if (it->feature_id == feature_id) // 否则之前就有这个特征点，之前全局特征点中与该帧图像匹配上的特征点个数统计
         {
             // 向全局特征点队列中与当前帧特征点匹配上的特征定添加当前帧特征点的2D位置
             // （虽然特征点匹配上，但是在每一帧图像坐标系中的位置是不一样的）
@@ -99,6 +101,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
 
     // 如果跟踪到的特征点低于一定阀值则也认为也是关键帧
     // 当前帧数较少
+    // last_track_num：这一帧被持续跟踪到的点的个数
     if (frame_count < 2 || last_track_num < 20)
         return true;
 
@@ -106,8 +109,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
     for (auto &it_per_id : feature)
     {
         // 这些特征点这个特征点出现的在当前图像帧中而且也不能是最近2帧才出现的
-        if (it_per_id.start_frame <= frame_count - 2 &&
-            it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
+        if (it_per_id.start_frame <= frame_count - 2 && it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
             // 计算frame_count为标准的最新第二帧和最新第三帧中该特征点视差
             parallax_sum += compensatedParallax2(it_per_id, frame_count);
@@ -200,13 +202,16 @@ void FeatureManager::setDepth(const VectorXd &x)
     }
 }
 
+/**
+ * @brief 去除外点
+ */
 void FeatureManager::removeFailures()
 {
     for (auto it = feature.begin(), it_next = feature.begin();
          it != feature.end(); it = it_next)
     {
         it_next++;
-        if (it->solve_flag == 2)
+        if (it->solve_flag == 2) // solve_flag == 2 solve failue
             feature.erase(it);
     }
 }
@@ -254,7 +259,6 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
 
-        // TODO it_per_id.used_num ??? 对应2D点个数
         // 该特征点所对应的2D特征值必须大于等于2，而且这个特征点开始被观察到不能是最近两帧
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
@@ -298,7 +302,6 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
 
             // it_per_frame.point已经是齐次坐标系的2D点
             // 多视图几何P218
-            // TODO 这里需要归一化？？？
             Eigen::Vector3d f = it_per_frame.point.normalized();
             svd_A.row(svd_idx++) = f[0] * P.row(2) - f[2] * P.row(0);
             svd_A.row(svd_idx++) = f[1] * P.row(2) - f[2] * P.row(1);
@@ -381,6 +384,10 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
     }
 }
 
+/**
+ * @brief 移除0号关键帧中的特征点，将每一个特征点开始出现的帧号减一，
+ *          如果这个关键点的帧号为0，则直接删除
+ */
 void FeatureManager::removeBack()
 {
     for (auto it = feature.begin(), it_next = feature.begin();
@@ -388,9 +395,11 @@ void FeatureManager::removeBack()
     {
         it_next++;
 
+        // 因为移除了0号关键帧中的特征点，所以所有的2D特征点的起始帧号减一
         if (it->start_frame != 0)
             it->start_frame--;
-        else
+        else // 在这个3D特征点第一次出现在0号关键帧上，所以删除0号关键帧上对应的2D关键点，
+             // 如果这个3D特征点的2D特征点为0的话，直接删除这个3D关键点
         {
             it->feature_per_frame.erase(it->feature_per_frame.begin());
             if (it->feature_per_frame.size() == 0)
@@ -399,19 +408,27 @@ void FeatureManager::removeBack()
     }
 }
 
+/**
+ * @brief 移除N号关键帧中的特征点，将将每一个特征点开始出现的帧号减一，如果这个关键帧的帧号为
+ *        如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉而保留IMU测量值在滑动窗口中
+ * @param frame_count
+ */
 void FeatureManager::removeFront(int frame_count)
 {
     for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next)
     {
         it_next++;
 
+        // 删除了N-1号帧，所以N号帧上的点变成了N-1号帧
         if (it->start_frame == frame_count)
         {
             it->start_frame--;
         }
         else
         {
+            // 清除在N-1号关键帧上的2D特征点
             int j = WINDOW_SIZE - 1 - it->start_frame;
+            // vector begin(),vector第一个元素的指针
             it->feature_per_frame.erase(it->feature_per_frame.begin() + j);
             if (it->feature_per_frame.size() == 0)
                 feature.erase(it);

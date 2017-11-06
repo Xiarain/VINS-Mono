@@ -118,8 +118,7 @@ class IntegrationBase
                 a_1_x(2), 0, -a_1_x(0),
                 -a_1_x(1), a_1_x(0), 0;
 
-            // Technical Report 公式（9）
-            // TODO 代码中的公式和论文中的公式对不上
+            // Technical Report 公式（9） 代码中的公式和论文中的公式对不上
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 

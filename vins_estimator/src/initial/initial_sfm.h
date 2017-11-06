@@ -16,8 +16,8 @@ using namespace std;
 struct SFMFeature
 {
     bool state;
-    int id;
-    vector<pair<int,Vector2d>> observation; // 2D点
+    int id; // 3D点特征点ID号
+    vector<pair<int,Vector2d>> observation; // int类型数据是帧号，2D点
     double position[3]; // 3D 点
     double depth; // 深度
 };

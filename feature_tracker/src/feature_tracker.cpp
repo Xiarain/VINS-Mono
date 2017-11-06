@@ -56,10 +56,10 @@ void FeatureTracker::setMask()
     // prefer to keep features that are tracked for long time
     // 选择保留那些跟踪时间更长的特征点
     // cnt_pts_id 数据结构： int cv::Point2f int
-    //            对应实际数据结构： 应该是被跟踪到的次数 输出被找到的2D点 ID号
+    //            对应实际数据结构： 被跟踪到的次数 输出被找到的2D点 ID号
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
-    for (unsigned int i = 0; i < forw_pts.size(); i++)
+        for (unsigned int i = 0; i < forw_pts.size(); i++)
         cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(forw_pts[i], ids[i])));
 
     // 将特征点通过被追踪的次数进行排序，排序的一句就是特征点被追踪的次数
@@ -76,6 +76,7 @@ void FeatureTracker::setMask()
     for (auto &it : cnt_pts_id)
     {
         // 查看这个区域是否是白色
+        // 如果这个地方已经有点的话，那么其他的点都会被删除掉
         if (mask.at<uchar>(it.second.first) == 255)
         {
             // 在Mask白色区域内，则将之前排序的cnt_pts_id数据结构填入相应的向量中
@@ -83,7 +84,7 @@ void FeatureTracker::setMask()
             ids.push_back(it.second.second);
             track_cnt.push_back(it.first);
 
-            // mask：图像指针 it.second.first：画圆的中心点 MIN_DIST：圆的半径 0：圆的颜色 -1：画圆线条的粗细
+            // mask：图像指针; it.second.first：画圆的中心点 MIN_DIST：圆的半径; 0：圆的颜色; -1：画圆线条的粗细，负数为填充效果;
             cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
         }
     }
@@ -345,7 +346,7 @@ void FeatureTracker::showUndistortion(const string &name)
 }
 
 /**
- * @brief 将所有特征点转换到一个标准化平面并且进行畸变
+ * @brief 将所有特征点转换到一个标准化平面并且进行去畸变
  * @return
  */
 vector<cv::Point2f> FeatureTracker::undistortedPoints()
@@ -356,6 +357,7 @@ vector<cv::Point2f> FeatureTracker::undistortedPoints()
     {
         Eigen::Vector2d a(cur_pts[i].x, cur_pts[i].y);
         Eigen::Vector3d b;
+        // 这里传递的特征点会到后续的处理，这些特征点都做了归一化处理，即没有乘以焦距
         m_camera->liftProjective(a, b);
         un_pts.push_back(cv::Point2f(b.x() / b.z(), b.y() / b.z()));
     }

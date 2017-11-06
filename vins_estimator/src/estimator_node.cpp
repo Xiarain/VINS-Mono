@@ -123,6 +123,9 @@ void update()
 
 }
 
+/**
+ * @brief 对齐IMU测量数据和camera特征点测量数据
+ */
 std::vector<std::pair<std::vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr>>
 getMeasurements()
 {

@@ -39,7 +39,7 @@ class FeaturePerId
   public:
     const int feature_id;
     int start_frame;
-    vector<FeaturePerFrame> feature_per_frame;
+    vector<FeaturePerFrame> feature_per_frame; // 这个3D会被其他帧所观测到，所以它对应的2D特征点是多个的
 
     int used_num;
     bool is_outlier;
@@ -58,6 +58,9 @@ class FeaturePerId
     int endFrame();
 };
 
+/**
+ * @brief FeatureManager 只保留了滑动窗口中的特征点数据
+ */
 class FeatureManager
 {
   public:
