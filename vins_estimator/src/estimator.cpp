@@ -194,7 +194,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
             // ESTIMATE_EXTRINSIC == 1
             if( ESTIMATE_EXTRINSIC != 2 && (header.stamp.toSec() - initial_timestamp) > 0.1)
             {
-               // 视觉结构初始化
+               // 视觉结构初始化,零偏,重力加速度,尺度,速度估计
                result = initialStructure();
                initial_timestamp = header.stamp.toSec();
             }
@@ -221,7 +221,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
         }
         else
             frame_count++;
-    }
+    } // 正常进行视觉里程计
     else
     {
         TicToc t_solve;
@@ -358,7 +358,7 @@ bool Estimator::initialStructure()
     //solve pnp for all frame
     map<double, ImageFrame>::iterator frame_it;
     map<int, Vector3d>::iterator it;
-    frame_it = all_image_frame.begin( );
+    frame_it = all_image_frame.begin();
 
     // 所有帧
     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
@@ -439,6 +439,7 @@ bool Estimator::initialStructure()
         cv::cv2eigen(t, T_pnp);
         T_pnp = R_pnp * (-T_pnp); // twc
 
+        // 将图像坐标系变换到IMU坐标系
         frame_it->second.R = R_pnp * RIC[0].transpose();
         frame_it->second.T = T_pnp;
     }
@@ -509,6 +510,7 @@ bool Estimator::visualInitialAlign()
     }
 
     // TODO
+    // 与第一帧对齐,第一帧就是单位阵
     for (int i = frame_count; i >= 0; i--)
         Ps[i] = s * Ps[i] - Rs[i] * TIC[0] - (s * Ps[0] - Rs[0] * TIC[0]);
 
@@ -521,7 +523,7 @@ bool Estimator::visualInitialAlign()
         if(frame_i->second.is_key_frame)
         {
             kv++;
-            Vs[kv] = frame_i->second.R * x.segment<3>(kv * 3);
+            Vs[kv] = frame_i->second.R * x.segment<3>(kv * 3); // 之前做矩阵处理的时候这里有一个旋转的逆
         }
     }
 
@@ -537,8 +539,8 @@ bool Estimator::visualInitialAlign()
     // 通过实际重力加速度和理想重力加速度(0,0,1)旋转求得旋转矩阵
     Matrix3d R0 = Utility::g2R(g);
 
-    // 排除yaw轴方向对重力加速度的影响
-    // TODO 为什么需要这样做
+
+    // TODO 这里减去yaw角做了两次处理?
     double yaw = Utility::R2ypr(R0 * Rs[0]).x();
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
     g = R0 * g;
@@ -1271,6 +1273,8 @@ void Estimator::slideWindow()
         if (frame_count == WINDOW_SIZE)
         {
             // 把滑动窗口中的0号关键帧以及IMU测量值移动到N号关键帧
+            // 0 1 2 3 ... N
+            // 1 2 3 ... N 0
             for (int i = 0; i < WINDOW_SIZE; i++)
             {
                 Rs[i].swap(Rs[i + 1]);
@@ -1289,6 +1293,7 @@ void Estimator::slideWindow()
             }
 
             // 第N-1帧放到第N帧
+            // 1 2 3 ... N N 没有第0帧了
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
@@ -1296,7 +1301,10 @@ void Estimator::slideWindow()
             Bas[WINDOW_SIZE] = Bas[WINDOW_SIZE - 1];
             Bgs[WINDOW_SIZE] = Bgs[WINDOW_SIZE - 1];
 
+            // 1 2 3 ... N 空
             delete pre_integrations[WINDOW_SIZE];
+            // 把最新的测量值给WINDOW_SIZE位置上的预积分容器
+            // acc_0,gyr_0 主要是为了后续的中值积分使用
             pre_integrations[WINDOW_SIZE] = new IntegrationBase{acc_0, gyr_0, Bas[WINDOW_SIZE], Bgs[WINDOW_SIZE]};
 
             // 清除时间最长的关键帧相应的IMU测量值
@@ -1316,10 +1324,12 @@ void Estimator::slideWindow()
             slideWindowOld();
         }
     }
-    else
+    else // 边缘化新的数据 frame_count == 10
     {
         if (frame_count == WINDOW_SIZE)
         {
+            // 遍历最新帧对应的的所有IMU数据
+            // 如果第二最新帧不是关键帧的话，则把这帧的视觉测量舍弃掉,将IMU数据积分到上一帧中
             for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
             {
                 // 把这个IMU测量值单位时间，线加速度，角加速度都放到预积分的类中，也就是接受了这次IMU的测量值
@@ -1327,6 +1337,7 @@ void Estimator::slideWindow()
                 Vector3d tmp_linear_acceleration = linear_acceleration_buf[frame_count][i];
                 Vector3d tmp_angular_velocity = angular_velocity_buf[frame_count][i];
 
+                // 将丢弃的图像帧对应的IMU数据放入到frame_count - 1预积分数据中
                 pre_integrations[frame_count - 1]->push_back(tmp_dt, tmp_linear_acceleration, tmp_angular_velocity);
 
                 dt_buf[frame_count - 1].push_back(tmp_dt);
@@ -1334,7 +1345,8 @@ void Estimator::slideWindow()
                 angular_velocity_buf[frame_count - 1].push_back(tmp_angular_velocity);
             }
 
-            // 第N-1帧放到第N帧
+            // 第N帧放到第N-1帧
+            // 把最新关键帧数据给倒数第二新的帧数据
             Headers[frame_count - 1] = Headers[frame_count];
             Ps[frame_count - 1] = Ps[frame_count];
             Vs[frame_count - 1] = Vs[frame_count];

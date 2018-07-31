@@ -39,6 +39,7 @@ void ResidualBlockInfo::Evaluate()
     //std::cout << saes.eigenvalues() << std::endl;
     //ROS_ASSERT(saes.eigenvalues().minCoeff() >= -1e-6);
 
+    // 鲁邦核函数
     if (loss_function)
     {
         double residual_scaling_, alpha_sq_norm_;
@@ -284,6 +285,7 @@ void MarginalizationInfo::marginalize()
     pthread_t tids[NUM_THREADS];
     ThreadsStruct threadsstruct[NUM_THREADS];
     int i = 0;
+    // 将这些factor分配给多个线程
     for (auto it : factors)
     {
         threadsstruct[i].sub_factors.push_back(it);

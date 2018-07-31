@@ -83,10 +83,10 @@ void predict(const sensor_msgs::ImuConstPtr &imu_msg)
     Eigen::Vector3d angular_velocity{rx, ry, rz};
 
     // tmp_Q 四元数 world坐标系到body坐标系
-    // acc_0 上一次的线加速度
+    // acc_0 上一次的线加速度测量值
     Eigen::Vector3d un_acc_0 = tmp_Q * (acc_0 - tmp_Ba - tmp_Q.inverse() * estimator.g);
 
-    // gyr_0 上一次的角加速度
+    // gyr_0 上一次的角加速度测量值
     Eigen::Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - tmp_Bg;
 
     // 更新四元数
