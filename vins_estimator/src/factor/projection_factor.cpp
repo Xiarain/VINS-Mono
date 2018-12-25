@@ -54,9 +54,9 @@ bool ProjectionFactor::Evaluate(double const *const *parameters, double *residua
     // IMU坐标系下点位置
     Eigen::Vector3d pts_imu_i = qic * pts_camera_i + tic;
     // 世界坐标系下点位置
-    Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi;
+    Eigen::Vector3d pts_w = Qi * pts_imu_i + Pi; // Qi Rbiw
     // IMU坐标系下点位置
-    Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
+    Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);// Qj Rbjw
     // camera坐标系下点位置
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
     Eigen::Map<Eigen::Vector2d> residual(residuals);

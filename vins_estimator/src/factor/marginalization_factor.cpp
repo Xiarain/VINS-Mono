@@ -99,7 +99,7 @@ MarginalizationInfo::~MarginalizationInfo()
  */
 void MarginalizationInfo::addResidualBlockInfo(ResidualBlockInfo *residual_block_info)
 {
-
+    // 向ResidualBlockInfo容器中添加ResidualBlockInfo指针
     factors.emplace_back(residual_block_info);
 
     // 参数块以及参数块的大小

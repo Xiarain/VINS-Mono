@@ -9,7 +9,7 @@ InitialEXRotation::InitialEXRotation(){
 }
 
 /**
- * @brief  通过对齐camera和IMU旋转的序列中求得camera与IMU之间的旋转偏移常量
+ * @brief  通过对齐camera和IMU旋转的序列中求得camera与IMU之间的旋转量
  * @param corres 两幅图像中的匹配角点
  * @param delta_q_imu IMU预积分值
  * @param calib_ric_result SVD分解奇异值向量

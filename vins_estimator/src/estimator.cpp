@@ -105,6 +105,7 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
+        // frame_count是当前关键帧在滑动窗口中的位置，
         int j = frame_count;
 
         // 上一次的线加速度
@@ -114,6 +115,9 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
 
         // 更新旋转矩阵
+        // TODO 这个Utility::deltaQ坐标系是怎么样的？
+        // Utility::deltaQ(un_gyr * dt).toRotationMatrix(); Rbk+1bk
+        // Rwbk
         Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix(); // delta q
 
         // 当前时刻的线加速度
@@ -121,6 +125,7 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
 
         // 更新IMU位置和速度
+        // 注意这个dt是IMU单位时间，这个过程需要IMU在两帧图像之间进行不停的积分，才能得到两个图像帧之间的旋转和平移量
         Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;
         Vs[j] += dt * un_acc;
     }
@@ -218,6 +223,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
             }
             else
                 slideWindow(); // slideWindow和frame_count 是同步的，
+
         }
         else
             frame_count++;
@@ -243,7 +249,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
         slideWindow();
         f_manager.removeFailures();
         ROS_DEBUG("marginalization costs: %fms", t_margin.toc());
+
         // prepare output of VINS
+        // 为VINS输出显示做准备，关键帧的位置
         key_poses.clear();
         for (int i = 0; i <= WINDOW_SIZE; i++)
             key_poses.push_back(Ps[i]);
@@ -345,7 +353,7 @@ bool Estimator::initialStructure()
     GlobalSFM sfm;
 
     // SFM构造,初始化初始帧中的相机位置和特征点空间3D位置
-    // 输出Q: Rwc
+    // 输出Q: Rwc, T: twc
     if(!sfm.construct(frame_count + 1, Q, T, l,
               relative_R, relative_T,
               sfm_f, sfm_tracked_points))
@@ -361,26 +369,35 @@ bool Estimator::initialStructure()
     frame_it = all_image_frame.begin( );
 
     // 所有帧
+    // 将相机坐标系转换到IMU坐标系中，然后再一次进行PnP求解，3D特征点还是使用之前SFM中求解出来的，后续也没有进行优化
     for (int i = 0; frame_it != all_image_frame.end( ); frame_it++)
     {
         // provide initial guess
+        // 利用之前用camera坐标系下求解出来的位置作为初始值
         cv::Mat r, rvec, t, D, tmp_r;
+
+        // Headers[i]滑动窗口中的每一帧已经在SFM初始化中求解出来相应的位置，所以不需要在这里通过PnP求解了
         if((frame_it->first) == Headers[i].stamp.toSec())
         {
+            // 将这一帧标记为关键帧
             frame_it->second.is_key_frame = true;
 
-            // RIC 相机坐标系转换到IMU坐标系
+            // RIC IMU坐标系转换到相机坐标系
+            // RIC[0].transpose() Rci
+            // Twc
             frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
             frame_it->second.T = T[i];
             i++;
             continue;
         }
+
         if((frame_it->first) > Headers[i].stamp.toSec())
         {
             i++;
         }
 
-        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix(); // Q: Rwc T:twc
+        // Tcw
+        Matrix3d R_inital = (Q[i].inverse()).toRotationMatrix();
         Vector3d P_inital = - R_inital * T[i];
         cv::eigen2cv(R_inital, tmp_r);
 
@@ -391,6 +408,7 @@ bool Estimator::initialStructure()
         frame_it->second.is_key_frame = false;
         vector<cv::Point3f> pts_3_vector;
         vector<cv::Point2f> pts_2_vector;
+
         for (auto &id_pts : frame_it->second.points)
         {
             int feature_id = id_pts.first;
@@ -432,6 +450,7 @@ bool Estimator::initialStructure()
         cv::Rodrigues(rvec, r);
 
 
+        // Twc
         MatrixXd R_pnp,tmp_R_pnp;
         cv::cv2eigen(r, tmp_R_pnp);
         R_pnp = tmp_R_pnp.transpose(); // Rwc
@@ -509,6 +528,9 @@ bool Estimator::visualInitialAlign()
     }
 
     // TODO
+    // 将SFM和后续求解出来的相机位姿,变换到imu坐标系下
+    // 然后以第一帧为世界坐标系原点,之前在SFM初始化的时候,以第l帧为世界坐标系原点
+    // Technical Report VINS-Mono 公式 14
     for (int i = frame_count; i >= 0; i--)
         Ps[i] = s * Ps[i] - Rs[i] * TIC[0] - (s * Ps[0] - Rs[0] * TIC[0]);
 
@@ -1261,13 +1283,14 @@ void Estimator::optimization()
 void Estimator::slideWindow()
 {
     TicToc t_margin;
+
     if (marginalization_flag == MARGIN_OLD)
     {
+        // 删除第x0帧
         // Rs[0] 滑动窗口中存在时间最长的关键帧
         back_R0 = Rs[0];
         back_P0 = Ps[0];
 
-        // 把第窗口中的关键帧往前挪一个位置，也就是
         if (frame_count == WINDOW_SIZE)
         {
             // 把滑动窗口中的0号关键帧以及IMU测量值移动到N号关键帧
@@ -1289,6 +1312,7 @@ void Estimator::slideWindow()
             }
 
             // 第N-1帧放到第N帧
+            //
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
@@ -1308,18 +1332,23 @@ void Estimator::slideWindow()
             {
                 double t_0 = Headers[0].stamp.toSec();
                 map<double, ImageFrame>::iterator it_0;
+
+                // 删除IMU预积分值
                 it_0 = all_image_frame.find(t_0);
                 delete it_0->second.pre_integration;
+                // 在all_image_frame删除all_image_frame.begin()与it_0之间的关键帧
                 all_image_frame.erase(all_image_frame.begin(), it_0);
 
             }
+            // 主要是对mappoint进行处理
             slideWindowOld();
         }
     }
     else
-    {
+    {   // 删除第xn-1帧
         if (frame_count == WINDOW_SIZE)
         {
+            // dt_buf单位时间缓冲区，每一个关键帧都对应着多个IMU时间戳
             for (unsigned int i = 0; i < dt_buf[frame_count].size(); i++)
             {
                 // 把这个IMU测量值单位时间，线加速度，角加速度都放到预积分的类中，也就是接受了这次IMU的测量值
@@ -1334,7 +1363,7 @@ void Estimator::slideWindow()
                 angular_velocity_buf[frame_count - 1].push_back(tmp_angular_velocity);
             }
 
-            // 第N-1帧放到第N帧
+            // 第N帧放到第N-1帧
             Headers[frame_count - 1] = Headers[frame_count];
             Ps[frame_count - 1] = Ps[frame_count];
             Vs[frame_count - 1] = Vs[frame_count];
@@ -1349,6 +1378,7 @@ void Estimator::slideWindow()
             linear_acceleration_buf[WINDOW_SIZE].clear();
             angular_velocity_buf[WINDOW_SIZE].clear();
 
+            // 主要是对mappoint进行处理
             slideWindowNew();
         }
     }

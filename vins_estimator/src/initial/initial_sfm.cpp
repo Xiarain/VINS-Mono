@@ -36,8 +36,8 @@ void GlobalSFM::triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matr
 
 /**
  * @brief 通过PnP求解两帧之间的位置关系
- * @param R_initial 初始旋转量 Rcw
- * @param P_initial 初始平移量 tcw
+ * @param R_initial 初始旋转量 Rwc
+ * @param P_initial 初始平移量 twc
  * @param i 帧序号
  * @param sfm_f 特征结构体队列
  * @return 是否成功
@@ -170,8 +170,8 @@ void GlobalSFM::triangulateTwoFrames(int frame0, Eigen::Matrix<double, 3, 4> &Po
 /**
  * @brief SFM构造,初始化初始帧中的相机位置和特征点空间3D位置
  * @param frame_num 帧数
- * @param q world到camera旋转量
- * @param T world到camera平移量
+ * @param q world到camera旋转量 Rwc
+ * @param T world到camera平移量 twc
  * @param l 选择两帧视差较大、特征点较多的图像帧，进行F矩阵初始化帧的帧序列号
  * @param relative_R i帧到j帧之间的旋转量
  * @param relative_T i帧到j帧之间的平移量
@@ -190,11 +190,11 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	// intial two view
   	// 0：初始化 frame[l] 和 frame[frame_num-1]的位置关系
 	// 这个初始化位置关系是有F矩阵初始化得到的
-	q[l].w() = 1;
+	q[l].w() = 1; // Rwc
 	q[l].x() = 0;
 	q[l].y() = 0;
 	q[l].z() = 0;
-	T[l].setZero();
+	T[l].setZero(); // twc
 	q[frame_num - 1] = q[l] * Quaterniond(relative_R);
 	T[frame_num - 1] = relative_T;
 	//cout << "init q_l " << q[l].w() << " " << q[l].vec().transpose() << endl;
@@ -211,6 +211,8 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	double c_translation[frame_num][3];
 	Eigen::Matrix<double, 3, 4> Pose[frame_num];
 
+    // Rwc->Rcw twc->tcw
+    // Tcw
 	c_Quat[l] = q[l].inverse();
 	c_Rotation[l] = c_Quat[l].toRotationMatrix();
 	c_Translation[l] = -1 * (c_Rotation[l] * T[l]);
@@ -334,10 +336,11 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	for (int i = 0; i < frame_num; i++)
 	{
 		//double array for ceres
+		// Tcw
 		c_translation[i][0] = c_Translation[i].x();
 		c_translation[i][1] = c_Translation[i].y();
 		c_translation[i][2] = c_Translation[i].z();
-		c_rotation[i][0] = c_Quat[i].w(); // Rcw
+		c_rotation[i][0] = c_Quat[i].w();
 		c_rotation[i][1] = c_Quat[i].x();
 		c_rotation[i][2] = c_Quat[i].y();
 		c_rotation[i][3] = c_Quat[i].z();
@@ -365,7 +368,7 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 												sfm_f[i].observation[j].second.x(),
 												sfm_f[i].observation[j].second.y());
 
-			problem.AddResidualBlock(cost_function, NULL, c_rotation[l], c_translation[l], // Rcw
+			problem.AddResidualBlock(cost_function, NULL, c_rotation[l], c_translation[l],
     								sfm_f[i].position);	 
 		}
 
@@ -392,21 +395,23 @@ bool GlobalSFM::construct(int frame_num, Quaterniond* q, Vector3d* T, int l,
 	// 经过ceres全局BA优化后，相机的旋转量
 	for (int i = 0; i < frame_num; i++)
 	{
-		q[i].w() = c_rotation[i][0]; // Rcw
+		// Rcw
+		q[i].w() = c_rotation[i][0];
 		q[i].x() = c_rotation[i][1]; 
 		q[i].y() = c_rotation[i][2]; 
 		q[i].z() = c_rotation[i][3];
 		// 四元数转置
-		q[i] = q[i].inverse(); // Rwc
+		// Rwc
+		q[i] = q[i].inverse();
 		//cout << "final  q" << " i " << i <<"  " <<q[i].w() << "  " << q[i].vec().transpose() << endl;
 	}
 
 	// 经过ceres全局BA优化后，相机的平移量，q*t
-  // TODO q*t 坐标变换？
+	// twc
 	for (int i = 0; i < frame_num; i++)
 	{
 
-		T[i] = -1 * (q[i] * Vector3d(c_translation[i][0], c_translation[i][1], c_translation[i][2]));
+		T[i] = -1 * (q[i] * Vector3d(c_translation[i][0], c_translation[i][1], c_translation[i][2])); // twc
 		//cout << "final  t" << " i " << i <<"  " << T[i](0) <<"  "<< T[i](1) <<"  "<< T[i](2) << endl;
 	}
 

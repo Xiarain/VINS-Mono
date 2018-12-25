@@ -4,7 +4,9 @@ project(benchmark_publisher)
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_FLAGS "-std=c++11 -DEIGEN_DONT_PARALLELIZE")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -rdynamic")
-set(Eigen3_DIR "/home/rain/workspace/Library/eigen3/share")
+#set(EIGEN3_INCLUDE_DIR "/home/rain/workspace/library/eigen-3.2.1/install/share")
+
+set(CMAKE_PREFIX_PATH "/home/rain/workspace/library/eigen-3.2.1/install/")
 
 find_package(catkin REQUIRED COMPONENTS
     roscpp

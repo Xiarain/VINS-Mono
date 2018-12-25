@@ -263,24 +263,27 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 
+        // 这个MapPoint的深度已经被估计了
         if (it_per_id.estimated_depth > 0)
             continue;
 
-        // imu_i：这个3D特征点第一次出现在哪一帧
+        // imu_i：这个3D特征点第一次出现在哪一帧，imu_i是以滑动窗口中的序列为准的
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
 
         ROS_ASSERT(NUM_OF_CAM == 1);
+        //
         Eigen::MatrixXd svd_A(2 * it_per_id.feature_per_frame.size(), 4);
         int svd_idx = 0;
 
         Eigen::Matrix<double, 3, 4> P0;
 
-        // 坐标变换 Rs Ps： 相机外参；tic，ric camera与IMU之间的外参，从camera坐标系到IMU坐标系；
+        // 坐标变换 Rs Ps： Twb，相机外参；tic，ric camera与IMU之间的外参，从IMU坐标系到camera坐标系 Tbc；
         // Eigen::Matrix3d 为3*3矩阵
-        // tic[0] 实际值为0
-        // TODO 这里的坐标变换是什么意义，将相机坐标位置从相机坐标系变换到IMU坐标系？？？
+        // 这里的坐标变换是什么意义，将系统坐标位置从IMU坐标系变换到camera坐标系
+        // R0,t0: Twc
         Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
         Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
+        // 定义但没有使用
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();
         P0.rightCols<1>() = Eigen::Vector3d::Zero();
 
@@ -293,9 +296,11 @@ void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
             Eigen::Matrix3d R1 = Rs[imu_j] * ric[0];
 
             // 两帧进行三角化需要两帧之间的变换关系
+            // Tc0c1
             Eigen::Vector3d t = R0.transpose() * (t1 - t0);
             Eigen::Matrix3d R = R0.transpose() * R1;
 
+            // Tc1c0
             Eigen::Matrix<double, 3, 4> P;
             P.leftCols<3>() = R.transpose();
             P.rightCols<1>() = -R.transpose() * t;

@@ -60,9 +60,12 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 #endif
 
         Eigen::Map<Eigen::Matrix<double, 15, 1>> residual(residuals);
+
+        // 计算IMU模型的非线性优化残差
         residual = pre_integration->evaluate(Pi, Qi, Vi, Bai, Bgi,
                                             Pj, Qj, Vj, Baj, Bgj);
 
+        // IMU的残差乘以协方差矩阵
         // P = F*P*F^T + V*n*V^T
         Eigen::Matrix<double, 15, 15> sqrt_info = Eigen::LLT<Eigen::Matrix<double, 15, 15>>(pre_integration->covariance.inverse()).matrixL().transpose();
         //sqrt_info.setIdentity();
@@ -94,7 +97,6 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
             // jacobians[3] jacobian_speedbias_j
             // Techical Report VINS-Mono 公式（22）
             // 对公式（22）IMU Model求雅克比矩阵
-            // TODO 公式大部分能说的通，但是jacobians[0]~jacobians[3]是怎么出来的或者他们之间的区别是什么？？？
             if (jacobians[0])
             {
                 Eigen::Map<Eigen::Matrix<double, 15, 7, Eigen::RowMajor>> jacobian_pose_i(jacobians[0]);

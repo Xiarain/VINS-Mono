@@ -186,7 +186,6 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
         std_msgs::Header header = imu_msg->header;
         header.frame_id = "world";
 
-        // 这里的里程计只是IMU的测量值进行计算得出
         if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR)
             pubLatestOdometry(tmp_P, tmp_Q, tmp_V, header);
     }
@@ -616,6 +615,7 @@ void process()
                 if(estimator.marginalization_flag == 0 && estimator.solver_flag == estimator.NON_LINEAR)
                 {
                     // 这一帧相机旋转和位移
+                    // Tbw
                     Vector3d vio_T_w_i = estimator.Ps[WINDOW_SIZE - 2];
                     Matrix3d vio_R_w_i = estimator.Rs[WINDOW_SIZE - 2];
 

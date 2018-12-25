@@ -5,6 +5,7 @@
 #include <sensor_msgs/Imu.h>
 #include <cv_bridge/cv_bridge.h>
 #include <message_filters/subscriber.h>
+#include <ros/console.h>
 
 #include "feature_tracker.h"
 
@@ -31,7 +32,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     }
 
     // frequency control
-    // FREQ == 100
+    // FREQ == 10
     // 当前帧和第一帧之间的平均时间在一个周期以内
     if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
     {
